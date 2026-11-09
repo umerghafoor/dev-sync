@@ -6,8 +6,13 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-rust-version = "1.82"
+rust-version = "1.88"
 authors = ["Umer Ghafoor"]
+repository = "https://github.com/OWNER/devsync"
+homepage = "https://OWNER.github.io/devsync/"
+documentation = "https://OWNER.github.io/devsync/"
+keywords = ["ssh", "sync", "remote", "rsync", "devtools"]
+categories = ["command-line-utilities", "development-tools", "filesystem"]
 
 [workspace.dependencies]
 devsync-proto = { path = "crates/devsync-proto" }

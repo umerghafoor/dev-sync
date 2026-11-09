@@ -2,31 +2,66 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*.*.*"]
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  dist:
-    name: Package (${{ matrix.os }})
+  verify:
+    name: verify version & tests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Tag matches Cargo.toml and package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          cargo_v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          npm_v=$(node -p "require('./extensions/vscode/package.json').version")
+          echo "tag=$tag cargo=$cargo_v vscode=$npm_v"
+          [ "$tag" = "$cargo_v" ] && [ "$tag" = "$npm_v" ] || {
+            echo "::error::version mismatch (run scripts/bump-version.sh $tag)"; exit 1; }
+          grep -q "^## \[$tag\]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no [$tag] section"; exit 1; }
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-latest, target: x86_64-apple-darwin }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { os: ubuntu-latest, target: aarch64-unknown-linux-musl }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
+          targets: ${{ matrix.target }},x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
-      - run: make dist
+        with:
+          key: ${{ matrix.target }}
+      - run: make dist CLIENT_TARGET=${{ matrix.target }}
       - uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ matrix.os }}
+          name: dist-${{ matrix.target }}
           path: dist/*.tar.gz
 
   vsix:
+    name: VS Code extension
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,14 +75,58 @@ jobs:
           path: extensions/vscode/*.vsix
 
   publish:
-    needs: [dist, vsix]
+    name: GitHub release
+    needs: [verify, build, vsix]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum *.tar.gz *.vsix > SHA256SUMS && cat SHA256SUMS
+      - name: Release notes from CHANGELOG.md
+        run: |
+          v="${{ needs.verify.outputs.version }}"
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }' CHANGELOG.md > notes.md
+          printf '\n---\nVerify downloads with `sha256sum -c SHA256SUMS --ignore-missing`.\n' >> notes.md
+          cat notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: devsync ${{ needs.verify.outputs.version }}
+          body_path: notes.md
+          files: |
+            dist/*.tar.gz
+            dist/*.vsix
+            dist/SHA256SUMS
+          prerelease: ${{ contains(needs.verify.outputs.version, '-') }}
+
+  marketplace:
+    name: publish extension (optional)
+    needs: publish
+    runs-on: ubuntu-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+          name: vsix
+      - uses: actions/setup-node@v4
         with:
-          files: artifacts/*
-          generate_release_notes: true
+          node-version: 20
+      - name: Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx --yes @vscode/vsce publish --packagePath *.vsix -p "$VSCE_PAT"
+      - name: Open VSX
+        if: env.OVSX_PAT != ''
+        run: npx --yes ovsx publish *.vsix -p "$OVSX_PAT"
+      - name: Skipped
+        if: env.VSCE_PAT == '' && env.OVSX_PAT == ''
+        run: echo "No marketplace tokens configured; extension published to the GitHub release only."

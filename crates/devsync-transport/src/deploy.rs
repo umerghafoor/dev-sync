@@ -47,8 +47,10 @@ fn search_dirs() -> Vec<PathBuf> {
         dirs.push(exe_dir.join("agents"));
         dirs.push(exe_dir.join("../share/devsync/agents"));
         dirs.push(exe_dir.join("../lib/devsync/agents"));
-        // cargo layout: target/{release,debug}/devsync next to target/<triple>/release/devsync
+        // cargo layouts: target/{release,debug}/devsync and
+        // target/<host-triple>/release/devsync, next to target/<triple>/release/devsync
         dirs.push(exe_dir.join(".."));
+        dirs.push(exe_dir.join("../.."));
     }
     if let Some(home) = std::env::var_os("HOME") {
         dirs.push(PathBuf::from(home).join(".devsync/agents"));

@@ -4,6 +4,12 @@ description = "Client-side engine of devsync: config, push/pull-back sync, remot
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 devsync-proto.workspace = true

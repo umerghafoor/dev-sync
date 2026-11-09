@@ -1,8 +1,9 @@
-/target/
-/dist/
-node_modules/
 *.vsix
-extensions/vscode/out/
-.devsync/
-.devsync-agent/
 .DS_Store
+.devsync-agent/
+.devsync/
+/dist/
+/target/
+docs/book/
+extensions/vscode/out/
+node_modules/
