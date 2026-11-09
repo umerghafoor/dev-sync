@@ -41,6 +41,30 @@ pub enum Event {
     UpToDate,
     Pulled {
         path: String,
+        bytes: u64,
+    },
+    /// What a sync is doing before files move (scanning can take a while
+    /// on big trees).
+    Stage {
+        stage: Stage,
+        message: String,
+    },
+    /// What a pull will download.
+    PullPlanned {
+        download: usize,
+        download_bytes: u64,
+        /// Of those, files edited locally: saved as `*.devsync-remote`.
+        conflicts: usize,
+    },
+    /// Transfer progress (throttled to a few updates per second).
+    Progress {
+        direction: Direction,
+        /// File being transferred.
+        path: String,
+        files_done: usize,
+        files_total: usize,
+        bytes_done: u64,
+        bytes_total: u64,
     },
     Conflict {
         path: String,
@@ -69,6 +93,8 @@ pub enum Event {
     },
     Offline {
         error: String,
+        /// When the next attempt is made (0 = unknown).
+        retry_in_ms: u64,
     },
     /// The remote is too large to sync whole; waiting for a selection.
     NeedsSelection {
@@ -80,6 +106,97 @@ pub enum Event {
     Info {
         message: String,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Stage {
+    ScanLocal,
+    ScanRemote,
+    Upload,
+    Download,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Direction {
+    Up,
+    Down,
+}
+
+/// Turns per-chunk byte counts into throttled [`Event::Progress`] events.
+pub struct Transfer<'a> {
+    rep: &'a dyn Reporter,
+    direction: Direction,
+    files_total: usize,
+    bytes_total: u64,
+    files_done: usize,
+    bytes_done: u64,
+    path: String,
+    file_base: u64,
+    file_size: u64,
+    last: Option<std::time::Instant>,
+}
+
+impl<'a> Transfer<'a> {
+    const EVERY: std::time::Duration = std::time::Duration::from_millis(100);
+
+    pub fn new(rep: &'a dyn Reporter, direction: Direction, files_total: usize, bytes_total: u64) -> Self {
+        Self {
+            rep,
+            direction,
+            files_total,
+            bytes_total,
+            files_done: 0,
+            bytes_done: 0,
+            path: String::new(),
+            file_base: 0,
+            file_size: 0,
+            last: None,
+        }
+    }
+
+    /// Starts a file of `size` bytes, of which `already` were sent earlier
+    /// (resumed upload).
+    pub fn file(&mut self, path: &str, size: u64, already: u64) {
+        self.path = path.to_string();
+        self.file_base = self.bytes_done;
+        self.file_size = size;
+        self.bytes_done += already.min(size);
+        self.emit(false);
+    }
+
+    pub fn bytes(&mut self, n: u64) {
+        self.bytes_done = (self.bytes_done + n).min(self.file_base + self.file_size);
+        self.emit(false);
+    }
+
+    pub fn file_done(&mut self) {
+        self.files_done += 1;
+        self.bytes_done = self.file_base + self.file_size;
+        self.emit(false);
+    }
+
+    /// Always reports the final state.
+    pub fn finish(&mut self) {
+        self.emit(true);
+    }
+
+    fn emit(&mut self, force: bool) {
+        let now = std::time::Instant::now();
+        if !force && self.last.is_some_and(|t| now.duration_since(t) < Self::EVERY) {
+            return;
+        }
+        self.last = Some(now);
+        self.rep.event(Event::Progress {
+            direction: self.direction,
+            path: self.path.clone(),
+            files_done: self.files_done,
+            files_total: self.files_total,
+            bytes_done: self.bytes_done,
+            bytes_total: self.bytes_total,
+        });
+    }
 }
 
 /// Receives events; implemented by the CLI's renderers.

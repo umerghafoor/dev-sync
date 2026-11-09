@@ -10,7 +10,9 @@ use devsync_client::{jobs, sync, ClientError, Event};
 use devsync_transport::Transient;
 use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, RecvTimeoutError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Paths whose changes never trigger a push (our own state, VCS internals).
@@ -22,6 +24,22 @@ fn relevant(root: &Path, path: &Path) -> bool {
         Some(".devsync") | Some(".git") => false,
         Some(_) => !rel.components().any(|c| c.as_os_str() == "node_modules" || c.as_os_str() == ".git"),
     }
+}
+
+/// Any line on stdin ("retry", or Enter in a terminal) asks for an
+/// immediate attempt instead of waiting for the backoff.
+fn retry_requests() -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    let f = flag.clone();
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let stdin = std::io::stdin();
+        while matches!(stdin.read_line(&mut line), Ok(n) if n > 0) {
+            f.store(true, Ordering::SeqCst);
+            line.clear();
+        }
+    });
+    flag
 }
 
 pub fn run(g: &Global) -> Result<i32> {
@@ -40,6 +58,7 @@ pub fn run(g: &Global) -> Result<i32> {
     let mut next_try = Instant::now();
     let mut next_collect = Instant::now();
     let opts = sync::PushOptions::default();
+    let retry_now = retry_requests();
 
     loop {
         if devsync_client::interrupted() {
@@ -72,7 +91,13 @@ pub fn run(g: &Global) -> Result<i32> {
             Err(RecvTimeoutError::Disconnected) => anyhow::bail!("file watcher stopped"),
         }
 
-        let now = Instant::now();
+        let mut now = Instant::now();
+        if retry_now.swap(false, Ordering::SeqCst) {
+            rep.event(Event::Info { message: "retrying now".into() });
+            dirty = true;
+            next_try = now;
+            backoff = Duration::from_secs(1);
+        }
         if dirty && now >= next_try {
             // Single attempt per round: we own the retry loop here so file
             // events keep being processed while offline.
@@ -83,7 +108,8 @@ pub fn run(g: &Global) -> Result<i32> {
                     backoff = Duration::from_secs(1);
                 }
                 Err(e) if e.is_transient() => {
-                    rep.event(Event::Offline { error: e.to_string() });
+                    now = Instant::now();
+                    rep.event(Event::Offline { error: e.to_string(), retry_in_ms: backoff.as_millis() as u64 });
                     next_try = now + backoff;
                     backoff = (backoff * 2).min(Duration::from_secs(30));
                 }

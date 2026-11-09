@@ -80,6 +80,12 @@
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "devsync.retry",
+        "title": "Retry Connection Now",
+        "category": "devsync",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "devsync.startWatch",
         "title": "Resume Auto Sync",
         "category": "devsync",

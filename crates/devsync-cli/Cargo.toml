@@ -28,6 +28,7 @@ anyhow.workspace = true
 serde_json.workspace = true
 notify-debouncer-mini.workspace = true
 ctrlc.workspace = true
+libc.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

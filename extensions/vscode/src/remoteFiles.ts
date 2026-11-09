@@ -5,7 +5,7 @@
 
 import * as path from "path";
 import * as vscode from "vscode";
-import { runJson } from "./cli";
+import { DevsyncEvent, runJson } from "./cli";
 
 export interface RemoteNode {
   path: string;
@@ -68,7 +68,11 @@ export class RemoteFiles implements vscode.TreeDataProvider<RemoteItem>, vscode.
   private readonly view: vscode.TreeView<RemoteItem>;
   private root?: string;
 
-  constructor(private readonly log: vscode.OutputChannel, private readonly afterChange: () => void) {
+  constructor(
+    private readonly log: vscode.OutputChannel,
+    private readonly afterChange: () => void,
+    private readonly withTransfer: <T>(title: string, op: (onEvent: (e: DevsyncEvent) => void) => Promise<T>) => Promise<T>,
+  ) {
     this.view = vscode.window.createTreeView("devsync.remoteFiles", {
       treeDataProvider: this,
       manageCheckboxStateManually: true,
@@ -117,14 +121,11 @@ export class RemoteFiles implements vscode.TreeDataProvider<RemoteItem>, vscode.
       .filter(([, s]) => s === vscode.TreeItemCheckboxState.Unchecked)
       .map(([i]) => i.node.path);
     try {
-      await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: "devsync: updating what is synced…" },
-        async () => {
-          if (unselect.length) await runJson(root, ["unselect", "--", ...unselect], 60_000);
-          // Selecting also downloads it, so it shows up locally right away.
-          if (select.length) await runJson(root, ["select", "--pull", "--", ...select], 1_800_000);
-        },
-      );
+      await this.withTransfer(select.length ? `syncing ${select.join(", ")}` : "updating what is synced", async (onEvent) => {
+        if (unselect.length) await runJson(root, ["unselect", "--", ...unselect], 60_000);
+        // Selecting also downloads it, so it shows up locally right away.
+        if (select.length) await runJson(root, ["select", "--pull", "--", ...select], 24 * 3600_000, onEvent);
+      });
       if (unselect.length) {
         void vscode.window.showInformationMessage(
           `No longer syncing ${unselect.join(", ")}. It stays on the remote; local copies are kept.`,

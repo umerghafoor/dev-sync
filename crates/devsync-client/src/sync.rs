@@ -3,7 +3,7 @@
 //! is retried from scratch, which is cheap because hashes are cached and
 //! partially uploaded files resume.
 
-use crate::events::{Event, Reporter};
+use crate::events::{Direction, Event, Reporter, Stage, Transfer};
 use crate::project::Project;
 use crate::{ClientError, Result};
 use devsync_fs::{scan, scan_one, write, HashCache, Plan};
@@ -40,13 +40,56 @@ pub struct Snapshot {
     map: HashMap<String, Hash>,
     /// False until this machine has completed a sync with the remote.
     existed: bool,
+    /// What the remote holds, as far as we know: the last remote scan,
+    /// updated with every transfer since. Unlike `map` it is kept even when
+    /// a sync doesn't finish, so "not on the remote yet" stays accurate
+    /// before the first complete sync. `None` if never scanned.
+    seen: Option<HashMap<String, Hash>>,
+    seen_path: PathBuf,
+}
+
+fn load_map(path: &Path) -> Option<HashMap<String, Hash>> {
+    fs::read(path).ok().and_then(|b| postcard::from_bytes(&b).ok())
+}
+
+fn save_map(path: &Path, map: &HashMap<String, Hash>) {
+    if let Ok(b) = postcard::to_allocvec(map) {
+        if let Some(d) = path.parent() {
+            let _ = fs::create_dir_all(d);
+        }
+        let tmp = path.with_extension("tmp");
+        if fs::write(&tmp, b).is_ok() {
+            let _ = fs::rename(tmp, path);
+        }
+    }
 }
 
 impl Snapshot {
     pub fn load(p: &Project) -> Self {
         let path = p.state_dir().join("synced.v2.bin");
-        let saved: Option<HashMap<String, Hash>> = fs::read(&path).ok().and_then(|b| postcard::from_bytes(&b).ok());
-        Self { path, existed: saved.is_some(), map: saved.unwrap_or_default() }
+        let seen_path = p.state_dir().join("remote-seen.v1.bin");
+        let saved = load_map(&path);
+        Self { path, existed: saved.is_some(), map: saved.unwrap_or_default(), seen: load_map(&seen_path), seen_path }
+    }
+
+    /// Records a full remote scan (made with the project's sync excludes)
+    /// right away, so it survives a sync that fails later.
+    pub fn observe_remote(&mut self, remote: &[Entry]) {
+        let seen: HashMap<String, Hash> = remote.iter().map(|e| (e.path.clone(), e.hash)).collect();
+        save_map(&self.seen_path, &seen);
+        self.seen = Some(seen);
+    }
+
+    /// The hash the remote is believed to hold for `rel`.
+    pub fn remote(&self, rel: &str) -> Option<&Hash> {
+        match &self.seen {
+            Some(seen) => seen.get(rel),
+            None => self.map.get(rel),
+        }
+    }
+
+    fn remote_paths(&self) -> Vec<&String> {
+        self.seen.as_ref().unwrap_or(&self.map).keys().collect()
     }
 
     /// Whether this machine has synced with the remote before.
@@ -60,21 +103,25 @@ impl Snapshot {
 
     pub fn set_all(&mut self, entries: &[Entry]) {
         self.map = entries.iter().map(|e| (e.path.clone(), e.hash)).collect();
+        self.seen = Some(self.map.clone());
     }
 
     pub fn set(&mut self, rel: &str, h: Hash) {
         self.map.insert(rel.to_string(), h);
+        if let Some(seen) = &mut self.seen {
+            seen.insert(rel.to_string(), h);
+        }
     }
 
     pub fn save(&self) {
-        if let Ok(b) = postcard::to_allocvec(&self.map) {
-            if let Some(d) = self.path.parent() {
-                let _ = fs::create_dir_all(d);
-            }
-            let tmp = self.path.with_extension("tmp");
-            if fs::write(&tmp, b).is_ok() {
-                let _ = fs::rename(tmp, &self.path);
-            }
+        save_map(&self.path, &self.map);
+        self.save_seen();
+    }
+
+    /// Saves only what we know about the remote (not "a sync completed").
+    pub fn save_seen(&self) {
+        if let Some(seen) = &self.seen {
+            save_map(&self.seen_path, seen);
         }
     }
 }
@@ -113,7 +160,7 @@ pub fn changes(p: &Project) -> Result<Vec<Change>> {
     let mut out: Vec<Change> = local
         .iter()
         .filter_map(|e| {
-            match snap.get(&e.path) {
+            match snap.remote(&e.path) {
                 None => Some(ChangeKind::Added),
                 Some(h) if h != &e.hash => Some(ChangeKind::Modified),
                 Some(_) => None,
@@ -124,8 +171,8 @@ pub fn changes(p: &Project) -> Result<Vec<Change>> {
     if p.config.sync.delete {
         let present: std::collections::HashSet<&str> = local.iter().map(|e| e.path.as_str()).collect();
         out.extend(
-            snap.map
-                .keys()
+            snap.remote_paths()
+                .into_iter()
                 .filter(|k| !present.contains(k.as_str()))
                 .map(|k| Change { path: k.clone(), status: ChangeKind::Deleted }),
         );
@@ -167,7 +214,7 @@ impl Pipe<'_> {
     }
 }
 
-fn upload_file(pipe: &mut Pipe, root: &Path, e: &Entry, offset: u64) -> Result<()> {
+fn upload_file(pipe: &mut Pipe, root: &Path, e: &Entry, offset: u64, prog: &mut Transfer) -> Result<()> {
     let path = root.join(&e.path);
     if e.size > offset {
         let mut f = fs::File::open(&path).map_err(|err| ClientError::Other(format!("{}: {err}", e.path)))?;
@@ -182,6 +229,7 @@ fn upload_file(pipe: &mut Pipe, root: &Path, e: &Entry, offset: u64) -> Result<(
             let data = lz4_flex::compress_prepend_size(&buf[..n]);
             pipe.send(&Request::PutChunk { hash: e.hash, offset: pos, data })?;
             pos += n as u64;
+            prog.bytes(n as u64);
         }
     }
     pipe.send(&Request::PutCommit { path: e.path.clone(), hash: e.hash, mode: e.mode, mtime_ns: e.mtime_ns })
@@ -281,21 +329,44 @@ fn pull_remote(
             take.len()
         ),
     });
+    let total_bytes: u64 = take.iter().chain(keep_both.iter()).map(|e| e.size).sum();
+    rep.event(Event::PullPlanned {
+        download: take.len() + keep_both.len(),
+        download_bytes: total_bytes,
+        conflicts: keep_both.len(),
+    });
+    let mut prog = Transfer::new(rep, Direction::Down, take.len() + keep_both.len(), total_bytes);
+    if !opts.dry_run {
+        rep.event(Event::Stage { stage: Stage::Download, message: "downloading".into() });
+    }
+    let mut checkpoint = Instant::now();
     for e in &take {
         if !opts.dry_run {
-            download(s, &p.root, e, &p.root.join(&e.path))?;
+            prog.file(&e.path, e.size, 0);
+            download(s, &p.root, e, &p.root.join(&e.path), &mut |n| prog.bytes(n))?;
+            prog.file_done();
             snap.set(&e.path, e.hash);
+            // Remember what already arrived, in case the link drops.
+            if checkpoint.elapsed() > std::time::Duration::from_secs(5) {
+                snap.save_seen();
+                checkpoint = Instant::now();
+            }
         }
-        rep.event(Event::Pulled { path: e.path.clone() });
+        rep.event(Event::Pulled { path: e.path.clone(), bytes: e.size });
         stats.updated.push(e.path.clone());
     }
     for e in &keep_both {
         let alt = format!("{}.devsync-remote", e.path);
         if !opts.dry_run {
-            download(s, &p.root, e, &p.root.join(&alt))?;
+            prog.file(&e.path, e.size, 0);
+            download(s, &p.root, e, &p.root.join(&alt), &mut |n| prog.bytes(n))?;
+            prog.file_done();
         }
         rep.event(Event::Conflict { path: e.path.clone(), saved_as: alt.clone() });
         stats.conflicts.push((e.path.clone(), alt));
+    }
+    if !opts.dry_run {
+        prog.finish();
     }
     Ok(stats)
 }
@@ -309,6 +380,10 @@ fn scan_call(s: &mut Session, req: &Request) -> Result<Response> {
     let r = s.call(req);
     s.set_timeout(normal);
     Ok(r?)
+}
+
+fn stage(rep: &dyn Reporter, stage: Stage, message: &str) {
+    rep.event(Event::Stage { stage, message: message.into() });
 }
 
 fn remote_manifest(s: &mut Session, ignore: devsync_proto::IgnoreSpec) -> Result<Vec<Entry>> {
@@ -345,12 +420,15 @@ fn under(path: &str, prefixes: &[String]) -> bool {
 /// down safely (sync excludes apply; local edits are never overwritten).
 pub fn pull_project(p: &Project, rep: &dyn Reporter, dry_run: bool) -> Result<PullStats> {
     p.with_retry(rep, || {
+        stage(rep, Stage::ScanLocal, "checking local files");
         let local = local_manifest(p)?;
         rep.event(Event::Connecting { host: p.host_label() });
         let mut s = p.connect()?;
         large_remote_guard(&mut s, p)?;
+        stage(rep, Stage::ScanRemote, "checking remote files");
         let remote = remote_manifest(&mut s, p.ignore_spec())?;
         let mut snap = Snapshot::load(p);
+        snap.observe_remote(&remote);
         let opts = PullOpts { dry_run, force: false, what: "pulling from remote" };
         let stats = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, &opts)?;
         s.close();
@@ -371,6 +449,7 @@ pub fn pull_paths(p: &Project, rep: &dyn Reporter, paths: &[String], force: bool
     p.with_retry(rep, || {
         rep.event(Event::Connecting { host: p.host_label() });
         let mut s = p.connect()?;
+        stage(rep, Stage::ScanRemote, "checking remote files");
         let all = remote_manifest(&mut s, devsync_proto::IgnoreSpec::default())?;
         let remote: Vec<Entry> = all.into_iter().filter(|e| under(&e.path, &wanted)).collect();
         if remote.is_empty() {
@@ -480,12 +559,14 @@ fn large_remote_guard(s: &mut Session, p: &Project) -> Result<()> {
 
 fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushStats> {
     let started = Instant::now();
+    stage(rep, Stage::ScanLocal, "checking local files");
     let mut local = local_manifest(p)?;
     rep.event(Event::Connecting { host: p.host_label() });
     let mut s = p.connect()?;
     if !Snapshot::load(p).existed() {
         large_remote_guard(&mut s, p)?;
     }
+    stage(rep, Stage::ScanRemote, "checking remote files");
     let remote = match scan_call(&mut s, &Request::Manifest { ignore: p.ignore_spec() })? {
         Response::Manifest(m) => m,
         other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
@@ -493,6 +574,7 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
     // First sync from this machine: start from the remote's code, so an empty
     // or new folder never overwrites (or, with delete on, wipes) the project.
     let mut snap = Snapshot::load(p);
+    snap.observe_remote(&remote);
     if p.config.sync.initial_pull && !remote.is_empty() && !snap.existed() {
         let first = PullOpts { dry_run: opts.dry_run, force: false, what: "first sync with this remote" };
         let pulled = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, &first)?;
@@ -531,16 +613,19 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
     let offset_of: HashMap<&str, u64> =
         files.iter().zip(offsets.iter()).map(|(e, o)| (e.path.as_str(), (*o).min(e.size))).collect();
 
+    stage(rep, Stage::Upload, "uploading");
+    let mut prog = Transfer::new(rep, Direction::Up, plan.upload.len(), plan.upload_bytes());
     let mut pipe = Pipe { s: &mut s, inflight: 0 };
     for e in &plan.upload {
+        let resumed = offset_of.get(e.path.as_str()).copied().unwrap_or(0);
+        prog.file(&e.path, e.size, resumed);
         match e.kind {
-            EntryKind::File => {
-                upload_file(&mut pipe, &p.root, e, offset_of.get(e.path.as_str()).copied().unwrap_or(0))?
-            }
+            EntryKind::File => upload_file(&mut pipe, &p.root, e, resumed, &mut prog)?,
             EntryKind::Symlink => {
                 pipe.send(&Request::PutSymlink { path: e.path.clone(), target: e.link.clone().unwrap_or_default() })?
             }
         }
+        prog.file_done();
         stats.files += 1;
         stats.bytes += e.size;
         rep.event(Event::Uploaded { path: e.path.clone(), bytes: e.size });
@@ -555,6 +640,7 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
         stats.deleted = plan.delete.len();
     }
     pipe.drain()?;
+    prog.finish();
     s.close();
     Snapshot::load(p).tap_set_all(&local);
     rep.event(Event::Synced {
@@ -593,7 +679,8 @@ pub fn push_with(
 }
 
 /// Downloads remote `e` to `dest` (verified, atomic).
-fn download(s: &mut Session, dest_root: &Path, e: &Entry, dest: &Path) -> Result<()> {
+/// `on_bytes` is called with each chunk's size, for progress.
+fn download(s: &mut Session, dest_root: &Path, e: &Entry, dest: &Path, on_bytes: &mut dyn FnMut(u64)) -> Result<()> {
     if e.kind == EntryKind::Symlink {
         write::write_symlink(dest_root, dest, e.link.as_deref().unwrap_or_default())?;
         return Ok(());
@@ -613,6 +700,7 @@ fn download(s: &mut Session, dest_root: &Path, e: &Entry, dest: &Path) -> Result
                         .map_err(|err| ClientError::Other(format!("corrupt chunk: {err}")))?;
                     f.write_all(&raw)?;
                     offset += raw.len() as u64;
+                    on_bytes(raw.len() as u64);
                     if eof || raw.is_empty() {
                         break;
                     }
@@ -649,6 +737,7 @@ fn pull_back_once(p: &Project, rep: &dyn Reporter, job_id: &str) -> Result<PullB
     let mut snap = Snapshot::load(p);
     let mut cache = HashCache::load(p.state_dir().join("hash-cache.v2.bin"));
     let mut stats = PullBackStats::default();
+    let mut prog = Transfer::new(rep, Direction::Down, changed.len(), changed.iter().map(|e| e.size).sum());
     for e in changed {
         let local = scan_one(&p.root, &e.path, &mut cache)?;
         let local_hash = local.as_ref().map(|l| l.hash);
@@ -659,21 +748,31 @@ fn pull_back_once(p: &Project, rep: &dyn Reporter, job_id: &str) -> Result<PullB
         // Safe to overwrite only if the local file is exactly what we last
         // synced (or absent on both sides); otherwise the user edited it.
         let safe = local_hash.as_ref() == snap.get(&e.path);
+        prog.file(&e.path, e.size, 0);
         if safe {
-            download(&mut s, &p.root, &e, &p.root.join(&e.path))?;
+            download(&mut s, &p.root, &e, &p.root.join(&e.path), &mut |n| prog.bytes(n))?;
+            prog.file_done();
             snap.set(&e.path, e.hash);
-            rep.event(Event::Pulled { path: e.path.clone() });
+            rep.event(Event::Pulled { path: e.path.clone(), bytes: e.size });
             stats.pulled.push(e.path);
         } else {
             let alt = format!("{}.devsync-remote", e.path);
-            download(&mut s, &p.root, &e, &p.root.join(&alt))?;
+            download(&mut s, &p.root, &e, &p.root.join(&alt), &mut |n| prog.bytes(n))?;
+            prog.file_done();
             rep.event(Event::Conflict { path: e.path.clone(), saved_as: alt.clone() });
             stats.conflicts.push((e.path, alt));
         }
     }
+    if prog_used(&stats) {
+        prog.finish();
+    }
     s.close();
     snap.save();
     Ok(stats)
+}
+
+fn prog_used(s: &PullBackStats) -> bool {
+    !s.pulled.is_empty() || !s.conflicts.is_empty()
 }
 
 /// Brings back files that remote job `job_id` created or modified.
@@ -702,11 +801,15 @@ pub fn pull(p: &Project, rep: &dyn Reporter, rel: &str, dest_root: Option<&Path>
             return Err(ClientError::Other(format!("nothing at remote path {rel:?}")));
         }
         let mut done = Vec::new();
+        let mut prog = Transfer::new(rep, Direction::Down, wanted.len(), wanted.iter().map(|e| e.size).sum());
         for e in &wanted {
-            download(&mut s, &dest_root, e, &dest_root.join(&e.path))?;
-            rep.event(Event::Pulled { path: e.path.clone() });
+            prog.file(&e.path, e.size, 0);
+            download(&mut s, &dest_root, e, &dest_root.join(&e.path), &mut |n| prog.bytes(n))?;
+            prog.file_done();
+            rep.event(Event::Pulled { path: e.path.clone(), bytes: e.size });
             done.push(e.path.clone());
         }
+        prog.finish();
         s.close();
         Ok(done)
     })

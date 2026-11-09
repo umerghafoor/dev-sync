@@ -47,8 +47,8 @@ a bigger **Run** box:
 
 | Section | What it's for |
 | --- | --- |
-| **Run** | Status dot and remote address, a command field, a full-width **▶ Run on Remote** button, **Run in Background** and **Terminal**, and your **Recent** commands (click to edit, ▶ to run again). Enter runs; ⌘Enter runs in the background; Shift+Enter adds a line |
-| **Not on Remote Yet** | Same A/M/D list as in Source Control, with Pull, Pull Files…, Push and Pause/Resume buttons |
+| **Run** | A status card (state, remote address, files not on the remote, running jobs; **Retry now** with a countdown while offline), a live **progress card** while pushing or pulling (bar, files and bytes done, speed, time left, current file), **Pull All / Push / Pull Files… / Choose Sync…**, the command box (**▶ Run on Remote**, **Background**, **Terminal**), **Activity** (files recently pushed ↑, pulled ↓ or deleted ✕; click to open) and **Recent commands**. Enter runs; ⌘Enter runs in the background; Shift+Enter adds a line |
+| **Not on Remote Yet** | Files whose content differs from the remote's (A/M/D, like Source Control), with Pull, Pull Files…, Push and Pause/Resume buttons. Files identical on both sides are never listed, even before the first sync has finished |
 | **Conflicts** | Appears only when there are conflicts |
 | **Remote Files** | The remote project, one folder at a time, with sizes. Check a folder to sync and download it; uncheck to stop syncing it (it stays on the remote). Nothing is hashed while browsing |
 | **Remote Jobs** | ✓ / ✗ / spinner for each job; click for output; ■ stop, ↻ run again |
@@ -60,6 +60,20 @@ field.
 You can drag the icon to reorder it, or drag the devsync sections into the
 Secondary Side Bar. If you only want the sidebar, set
 `devsync.sourceControl` to `false` to hide devsync from the Source Control view.
+
+### Seeing what is pushed or pulled
+
+While files move, the status bar shows the direction and percentage
+(`☁↑ devsync 45% · 3/40`; hover for size, speed and the current file), the
+sidebar's progress card shows the details, and manual Push/Pull also show a
+notification with a progress bar. Every transferred file is added to
+**Activity**.
+
+### When the remote can't be reached
+
+Auto sync keeps your changes and retries with backoff (up to every 30 s).
+To try immediately: **Retry now** in the sidebar's status card, in the
+status-bar menu or its tooltip, or **devsync: Retry Connection Now**.
 
 ### Pulling from the remote
 

@@ -24,6 +24,20 @@ take 10–20 s, while sessions on the shared connection cost one round trip.
 Keep `ssh.multiplex = true` and a long `ssh.control_persist_secs` (default
 600) so the connection setup is paid rarely.
 
+## Retrying now
+
+While offline, `devsync watch` says when it will try next. Press **Enter** in
+its terminal to retry immediately (VS Code: **Retry now**). One-off commands
+(`push`, `pull`, `exec`) retry on their own with backoff.
+
+## Seeing progress
+
+In a terminal, pushes and pulls draw a live line with a progress bar, files
+and bytes done, speed, time left and the current file. Up to 200 files are
+also listed one per line (all of them with `-v`). Set `DEVSYNC_NO_PROGRESS=1`
+to turn the live line off. With `--json`, `progress` events carry the same
+numbers.
+
 ## Tuning
 
 ```toml

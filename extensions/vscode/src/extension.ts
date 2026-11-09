@@ -10,6 +10,7 @@ import { asResource, Model } from "./model";
 import { DevsyncScm } from "./scm";
 import { Sidebar } from "./views";
 import { RemoteFiles } from "./remoteFiles";
+import { Activity, formatBytes } from "./activity";
 
 const CONFIG_FILE = ".devsync.toml";
 
@@ -33,6 +34,9 @@ class Controller implements vscode.Disposable {
   private state: SyncState = "stopped";
   private detail = "";
   private readonly notifyJobs = new Set<string>();
+  private readonly activity = new Activity();
+  /** When offline: epoch ms of auto sync's next attempt. */
+  private retryAt = 0;
 
   constructor(private readonly ctx: vscode.ExtensionContext, private readonly log: vscode.OutputChannel) {
     this.status = vscode.window.createStatusBarItem("devsync.status", vscode.StatusBarAlignment.Left, 50);
@@ -46,9 +50,22 @@ class Controller implements vscode.Disposable {
       run: (command, background) =>
         background ? this.runInBackground(command, this.activeDir()) : this.runInTerminal(command, this.activeDir()),
       exec: (id) => void vscode.commands.executeCommand(id),
+      open: (rel) => {
+        if (this.root) void vscode.window.showTextDocument(vscode.Uri.file(path.join(this.root, rel)), { preview: true });
+      },
+      clearActivity: () => this.activity.clearRecent(),
     });
-    this.remoteFiles = new RemoteFiles(this.log, () => this.model?.scheduleRefresh(0));
-    this.disposables.push(this.sidebar, this.remoteFiles);
+    this.remoteFiles = new RemoteFiles(
+      this.log,
+      () => this.model?.scheduleRefresh(0),
+      (title, op) => this.withTransfer(title, op),
+    );
+    this.disposables.push(
+      this.sidebar,
+      this.remoteFiles,
+      this.activity,
+      this.activity.onDidChange(() => this.setState(this.state, this.detail)),
+    );
     this.registerCommands();
     this.pushRunState();
     const root = await this.findRoot();
@@ -128,12 +145,29 @@ class Controller implements vscode.Disposable {
       stopped: ["$(debug-pause)", "devsync: paused"],
       choose: ["$(list-tree)", "devsync: choose what to sync"],
     };
-    const [icon, label] = view[state];
+    let [icon, label] = view[state];
+    const t = this.activity.transfer;
+    if (t && t.direction !== "none") {
+      const pct = t.bytesTotal > 0 ? (100 * Math.min(t.bytesDone, t.bytesTotal)) / t.bytesTotal : 100;
+      icon = t.direction === "up" ? "$(cloud-upload)" : "$(cloud-download)";
+      label = `devsync ${Math.floor(pct)}% · ${t.filesDone}/${t.filesTotal}`;
+    } else if (t) {
+      icon = "$(sync~spin)";
+      label = "devsync: checking";
+    }
     const running = this.model?.runningJobs ?? 0;
     this.status.text = `${icon} ${label}${running ? ` · $(play) ${running}` : ""}`;
     const tip = new vscode.MarkdownString(undefined, true);
     tip.appendMarkdown(`**devsync** — ${state}\n\n`);
     if (detail) tip.appendText(`${detail}\n\n`);
+    if (t && t.direction !== "none") {
+      tip.appendText(
+        `${t.direction === "up" ? "Pushing" : "Pulling"} ${t.filesDone}/${t.filesTotal} files, ` +
+          `${formatBytes(Math.min(t.bytesDone, t.bytesTotal))} of ${formatBytes(t.bytesTotal)}` +
+          `${t.rate > 0 ? ` at ${formatBytes(t.rate)}/s` : ""}\n${t.path}\n\n`,
+      );
+    }
+    if (state === "offline") tip.appendMarkdown("[Retry now](command:devsync.retry)\n\n");
     if (this.lastSync) tip.appendMarkdown(`Last sync: ${this.lastSync.toLocaleTimeString()}\n\n`);
     tip.appendMarkdown("Click for actions");
     this.status.tooltip = tip;
@@ -180,6 +214,9 @@ class Controller implements vscode.Disposable {
       running: this.model?.runningJobs ?? 0,
       pending: this.model?.pendingChanges ?? 0,
       history: this.ctx.workspaceState.get<string[]>("devsync.history", []),
+      retryAt: this.state === "offline" ? this.retryAt : 0,
+      transfer: this.activity.transfer,
+      activity: this.activity.recent,
     });
   }
 
@@ -191,7 +228,14 @@ class Controller implements vscode.Disposable {
   }
 
   private onEvent(e: DevsyncEvent): void {
+    this.activity.handle(e);
     switch (e.event) {
+      case "stage":
+        if (this.state !== "syncing") this.setState("syncing", e.message);
+        break;
+      case "pull_planned":
+        if (e.download > 0) this.setState("syncing", `${e.download} file(s) to download`);
+        break;
       case "watching":
         this.setState("idle");
         break;
@@ -216,6 +260,7 @@ class Controller implements vscode.Disposable {
         break;
       case "retrying":
       case "offline":
+        this.retryAt = Date.now() + (e.event === "offline" ? e.retry_in_ms : e.delay_ms);
         this.setState("offline", e.error);
         this.model?.scheduleRefresh();
         break;
@@ -232,8 +277,11 @@ class Controller implements vscode.Disposable {
             .then((pick) => pick && this.remoteFiles?.reveal());
         }
         break;
+      case "info":
+        if (e.message === "retrying now") this.setState("syncing", "retrying now");
+        break;
       case "pulled":
-        this.log.appendLine(`pulled back ${e.path}`);
+        this.log.appendLine(`pulled ${e.path}`);
         this.model?.scheduleRefresh();
         break;
       case "conflict":
@@ -386,18 +434,59 @@ class Controller implements vscode.Disposable {
     });
   }
 
+  /** Tries to reach the remote now instead of waiting for the backoff. */
+  private retryNow(): void {
+    if (this.watch?.running) {
+      this.watch.send("retry");
+      this.setState("syncing", "retrying now");
+    } else {
+      this.startWatch();
+    }
+  }
+
+  /**
+   * Runs a one-off push/pull with a progress notification and the sidebar's
+   * live transfer card, both fed from the CLI's progress events.
+   */
+  async withTransfer<T>(title: string, op: (onEvent: (e: DevsyncEvent) => void) => Promise<T>): Promise<T> {
+    return vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `devsync: ${title}` },
+      async (progress) => {
+        let shown = 0;
+        const onEvent = (e: DevsyncEvent) => {
+          this.activity.handle(e);
+          if (e.event === "stage") progress.report({ message: `${e.message}…` });
+          if (e.event === "retrying") progress.report({ message: `network problem — retry #${e.attempt}` });
+          if (e.event === "progress") {
+            const pct = e.bytes_total > 0 ? (100 * Math.min(e.bytes_done, e.bytes_total)) / e.bytes_total : 100;
+            const name = e.path.split("/").pop() ?? e.path;
+            progress.report({
+              increment: Math.max(0, pct - shown),
+              message: `${e.files_done}/${e.files_total} files · ${formatBytes(Math.min(e.bytes_done, e.bytes_total))} / ${formatBytes(e.bytes_total)} · ${name}`,
+            });
+            shown = Math.max(shown, pct);
+          }
+        };
+        try {
+          return await op(onEvent);
+        } finally {
+          this.activity.end();
+        }
+      },
+    );
+  }
+
   /** Pulls the whole project ([]) or the given project-relative paths. */
   private async pullPaths(rels: string[]): Promise<void> {
     const root = this.requireRoot();
     const what = rels.length === 0 ? "project" : rels.length === 1 ? rels[0] : `${rels.length} items`;
-    const r = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `devsync: pulling ${what} from remote…` },
-      () =>
-        runJson<{ updated: string[]; conflicts: { path: string; saved_as: string }[] }>(
-          root,
-          ["pull", "--", ...rels],
-          600_000,
-        ),
+    const r = await this.withTransfer(`pulling ${what} from remote`, (onEvent) =>
+      runJson<{ updated: string[]; conflicts: { path: string; saved_as: string }[] }>(
+        root,
+        ["pull", "--", ...rels],
+        24 * 3600_000,
+        onEvent,
+      ),
     );
     this.model?.scheduleRefresh(0);
     if (r.updated.length === 0 && r.conflicts.length === 0) {
@@ -436,6 +525,15 @@ class Controller implements vscode.Disposable {
     reg("devsync.menu", async () => {
       const last = this.ctx.workspaceState.get<string>("devsync.lastCommand");
       const items: (vscode.QuickPickItem & { cmd?: string })[] = [
+        ...(this.state === "offline" || this.state === "error"
+          ? [
+              {
+                label: "$(refresh) Retry now",
+                description: this.detail,
+                cmd: "devsync.retry",
+              },
+            ]
+          : []),
         { label: "Run", kind: vscode.QuickPickItemKind.Separator },
         { label: "$(play) Run command on remote…", cmd: "devsync.run" },
         { label: "$(debug-rerun) Run again", description: last, cmd: "devsync.rerun" },
@@ -511,15 +609,18 @@ class Controller implements vscode.Disposable {
 
     reg("devsync.push", async () => {
       const root = this.requireRoot();
-      await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.SourceControl, title: "Pushing to remote" },
-        async () => {
-          const r = await run(root, ["push"], 600_000);
-          if (r.code !== 0) throw new Error(r.stderr.trim().split("\n").pop());
-          this.lastSync = new Date();
-          this.setState(this.watch?.running ? "synced" : "stopped", r.stderr.trim().split("\n").pop() ?? "");
-        },
+      const r = await this.withTransfer("pushing to remote", (onEvent) =>
+        runJson<DevsyncEvent>(root, ["push"], 24 * 3600_000, onEvent),
       );
+      this.lastSync = new Date();
+      const said =
+        r.event === "synced"
+          ? `pushed ${r.files} file(s), ${formatBytes(r.bytes)}`
+          : r.event === "up_to_date"
+            ? "remote is up to date"
+            : "";
+      this.setState(this.watch?.running ? "synced" : "stopped", said);
+      if (said) vscode.window.setStatusBarMessage(`$(check) devsync: ${said}`, 4000);
       this.model?.scheduleRefresh(0);
     });
 
@@ -632,6 +733,7 @@ class Controller implements vscode.Disposable {
     });
     reg("devsync.refreshRemoteFiles", () => this.remoteFiles?.refresh());
 
+    reg("devsync.retry", () => this.retryNow());
     reg("devsync.startWatch", () => this.startWatch());
     reg("devsync.stopWatch", () => this.stopWatch());
     reg("devsync.toggleWatch", () => (this.watch?.running ? this.stopWatch() : this.startWatch()));

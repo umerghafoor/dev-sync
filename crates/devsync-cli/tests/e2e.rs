@@ -322,6 +322,28 @@ fn changes_lists_unsynced_files_like_git_status() {
 }
 
 #[test]
+fn changes_lists_only_files_that_differ_from_the_remote_before_first_sync() {
+    let env = setup();
+    // Both sides already have the same code, but no sync has completed.
+    write(&env.remote.join("same.txt"), "x");
+    write(&env.local.join("same.txt"), "x");
+    write(&env.remote.join("differs.txt"), "remote");
+    write(&env.local.join("differs.txt"), "local");
+    write(&env.local.join("new.txt"), "new");
+    // Before anything is known about the remote, everything is new.
+    assert!(ok(&devsync(&env.local, &["changes"])).contains("A same.txt"));
+    // Any remote scan (here a dry-run pull) teaches devsync what is there.
+    ok(&devsync(&env.local, &["pull", "--dry-run"]));
+    let out = ok(&devsync(&env.local, &["changes"]));
+    assert!(!out.contains("same.txt"), "identical files are not listed: {out}");
+    assert!(out.contains("M differs.txt") && out.contains("A new.txt"), "{out}");
+    // Progress events are streamed for transfers.
+    let o = devsync(&env.local, &["--json", "push"]);
+    let out = ok(&o);
+    assert!(out.contains(r#""event":"progress""#) && out.contains(r#""direction":"up""#), "{out}");
+}
+
+#[test]
 fn first_sync_pulls_existing_remote_code_into_new_folder() {
     let env = setup();
     // The remote already holds the project.

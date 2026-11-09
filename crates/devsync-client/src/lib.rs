@@ -11,7 +11,7 @@ pub mod selection;
 pub mod sync;
 
 pub use config::Config;
-pub use events::{Event, Reporter};
+pub use events::{Direction, Event, Reporter, Stage, Transfer};
 pub use project::Project;
 
 use devsync_transport::{Transient, TransportError};

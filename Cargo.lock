@@ -290,6 +290,7 @@ dependencies = [
  "devsync-fs",
  "devsync-proto",
  "devsync-transport",
+ "libc",
  "notify-debouncer-mini",
  "serde_json",
  "tempfile",

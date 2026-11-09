@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Progress for pushes and pulls: a live progress bar in the terminal (files,
+  bytes, speed, time left, current file) and `stage`, `pull_planned` and
+  `progress` events in `--json` output.
+- VS Code: redesigned Run panel with a status card, a live progress card, a
+  grid of sync actions and an **Activity** list of files recently pushed or
+  pulled; progress in the status bar and in Push/Pull notifications.
+- Retry now when offline: press Enter in `devsync watch`, or use **Retry now**
+  in VS Code (sidebar, status-bar menu, command palette).
+
 - VS Code: a Source Control provider that works like Git's view: a command
   box (⌘Enter runs on the remote), "Not on remote yet" with A/M/D badges,
   conflicts with compare / keep yours / accept remote, and remote jobs with
@@ -63,6 +72,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- "Not on remote yet" (`devsync changes`) listed every file until a first sync
+  had completed. It now compares with what the remote actually holds (recorded
+  at every remote scan and kept even if a sync is interrupted), so only files
+  that differ are listed.
 - Truncated agent uploads (connection dropped mid-transfer) were installed as
   if complete, causing endless reconnect loops; uploads are now verified
   before installation, existing agents are checked by size, uploads are

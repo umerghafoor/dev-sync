@@ -41,8 +41,13 @@ export function binaryPath(): string {
   return "devsync";
 }
 
-/** Runs a devsync command to completion. */
-export function run(cwd: string, args: string[], timeoutMs = 120_000): Promise<RunResult> {
+/** Runs a devsync command to completion. `onLine` sees each stdout line as it arrives. */
+export function run(
+  cwd: string,
+  args: string[],
+  timeoutMs = 120_000,
+  onLine?: (line: string) => void,
+): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     let child: ChildProcess;
     try {
@@ -54,7 +59,19 @@ export function run(cwd: string, args: string[], timeoutMs = 120_000): Promise<R
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill(), timeoutMs);
-    child.stdout?.on("data", (d) => (stdout += d.toString()));
+    let partial = "";
+    child.stdout?.on("data", (d) => {
+      const text = d.toString();
+      stdout += text;
+      if (!onLine) return;
+      partial += text;
+      let nl: number;
+      while ((nl = partial.indexOf("\n")) >= 0) {
+        const line = partial.slice(0, nl).trim();
+        partial = partial.slice(nl + 1);
+        if (line) onLine(line);
+      }
+    });
     child.stderr?.on("data", (d) => (stderr += d.toString()));
     child.on("error", (err: NodeJS.ErrnoException) => {
       clearTimeout(timer);
@@ -68,8 +85,26 @@ export function run(cwd: string, args: string[], timeoutMs = 120_000): Promise<R
 }
 
 /** Runs `devsync --json <args>` and parses the last JSON line of stdout. */
-export async function runJson<T>(cwd: string, args: string[], timeoutMs?: number): Promise<T> {
-  const r = await run(cwd, ["--json", ...args], timeoutMs);
+export async function runJson<T>(
+  cwd: string,
+  args: string[],
+  timeoutMs?: number,
+  onEvent?: (e: DevsyncEvent) => void,
+): Promise<T> {
+  const r = await run(
+    cwd,
+    ["--json", ...args],
+    timeoutMs,
+    onEvent
+      ? (line) => {
+          try {
+            onEvent(JSON.parse(line));
+          } catch {
+            // not an event
+          }
+        }
+      : undefined,
+  );
   const lines = r.stdout.trim().split("\n").filter((l) => l.trim().length > 0);
   const last = lines[lines.length - 1];
   if (!last) {
@@ -131,6 +166,11 @@ export class EventStream implements vscode.Disposable {
     });
   }
 
+  /** Writes a line to the process (e.g. "retry"). */
+  send(line: string): void {
+    this.child?.stdin?.write(`${line}\n`);
+  }
+
   get running(): boolean {
     return !!this.child && this.child.exitCode === null && !this.stopped;
   }
@@ -154,14 +194,26 @@ export type DevsyncEvent =
   | { event: "deleted"; path: string }
   | { event: "synced"; files: number; bytes: number; deleted: number; millis: number }
   | { event: "up_to_date" }
-  | { event: "pulled"; path: string }
+  | { event: "pulled"; path: string; bytes: number }
+  | { event: "stage"; stage: "scan_local" | "scan_remote" | "upload" | "download"; message: string }
+  | { event: "pull_planned"; download: number; download_bytes: number; conflicts: number }
+  | {
+      event: "progress";
+      direction: "up" | "down";
+      path: string;
+      files_done: number;
+      files_total: number;
+      bytes_done: number;
+      bytes_total: number;
+    }
+  | { event: "pull_done"; updated: string[] }
   | { event: "conflict"; path: string; saved_as: string }
   | { event: "job_started"; id: string; command: string; cwd: string }
   | { event: "job_updated"; id: string; state: string; new_bytes: number }
   | { event: "job_finished"; id: string; state: string; exit_code: number | null }
   | { event: "watching"; root: string }
   | { event: "changed"; paths: number }
-  | { event: "offline"; error: string }
+  | { event: "offline"; error: string; retry_in_ms: number }
   | { event: "needs_selection"; message: string }
   | { event: "warning"; message: string }
   | { event: "info"; message: string }

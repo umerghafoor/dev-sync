@@ -248,5 +248,6 @@ fn main() {
         return;
     }
     let code = commands::run(cli);
+    ui::finish();
     std::process::exit(code);
 }
