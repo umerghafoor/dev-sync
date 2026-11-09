@@ -1,0 +1,18 @@
+[package]
+name = "devsync-fs"
+description = "Tree scanning, ignore rules, content hashing and sync planning for devsync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+devsync-proto.workspace = true
+serde.workspace = true
+bincode.workspace = true
+blake3.workspace = true
+ignore.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
