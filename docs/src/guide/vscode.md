@@ -50,7 +50,7 @@ If a remote command changes a file you also edited, a notification offers
 
 | Setting | Default | |
 | --- | --- | --- |
-| `devsync.binaryPath` | `""` | Path to `devsync`. Empty: searches `PATH`, `~/.cargo/bin`, `/usr/local/bin`, `/opt/homebrew/bin` |
+| `devsync.binaryPath` | `""` | Path to `devsync`. Empty: searches `PATH`, `~/.local/bin`, `~/.cargo/bin`, `/usr/local/bin`, `/opt/homebrew/bin` |
 | `devsync.autoSync` | `true` | Start auto sync when a devsync project is opened |
 | `devsync.openOutputOnBackgroundRun` | `true` | Open a background job's output when it starts |
 

@@ -22,7 +22,13 @@ export function binaryPath(): string {
     return configured.replace(/^~(?=\/|$)/, os.homedir());
   }
   const dirs = (process.env.PATH ?? "").split(path.delimiter);
-  dirs.push(path.join(os.homedir(), ".cargo", "bin"), "/usr/local/bin", "/opt/homebrew/bin");
+  // Editors started from the Dock/launcher may not inherit the shell PATH.
+  dirs.push(
+    path.join(os.homedir(), ".local", "bin"),
+    path.join(os.homedir(), ".cargo", "bin"),
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+  );
   for (const d of dirs) {
     const candidate = path.join(d, "devsync");
     try {

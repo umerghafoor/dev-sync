@@ -213,7 +213,7 @@
         "devsync.binaryPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to the `devsync` binary. Empty: look it up on `PATH` (and `~/.cargo/bin`)."
+          "markdownDescription": "Path to the `devsync` binary. Empty: look it up on `PATH` (and `~/.local/bin`, `~/.cargo/bin`)."
         },
         "devsync.autoSync": {
           "type": "boolean",

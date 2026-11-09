@@ -33,7 +33,7 @@ coding agents and the terminal all share one sync engine.
 
 | Setting | Default | |
 | --- | --- | --- |
-| `devsync.binaryPath` | `""` | Path to `devsync`; empty = search `PATH` and `~/.cargo/bin` |
+| `devsync.binaryPath` | `""` | Path to `devsync`; empty = search `PATH`, `~/.local/bin` and `~/.cargo/bin` |
 | `devsync.autoSync` | `true` | Start auto sync when a devsync project opens |
 | `devsync.openOutputOnBackgroundRun` | `true` | Open a background job's output file when it starts |
 
