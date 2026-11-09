@@ -149,6 +149,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "devsync-transport"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "devsync-fs",
+ "devsync-proto",
+ "libc",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

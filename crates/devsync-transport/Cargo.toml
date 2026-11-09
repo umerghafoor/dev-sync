@@ -1,0 +1,16 @@
+[package]
+name = "devsync-transport"
+description = "Short-lived agent sessions over ssh (or locally), agent deployment and retry policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+devsync-proto.workspace = true
+devsync-fs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+blake3.workspace = true
+libc.workspace = true
