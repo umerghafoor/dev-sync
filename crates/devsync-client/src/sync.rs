@@ -300,8 +300,19 @@ fn pull_remote(
     Ok(stats)
 }
 
+/// Requests that make the agent scan the whole project. A first scan of a
+/// large tree (hashing gigabytes) can take long; liveness is still guarded by
+/// ssh keepalives, so allow up to an hour instead of the normal timeout.
+fn scan_call(s: &mut Session, req: &Request) -> Result<Response> {
+    let normal = s.timeout();
+    s.set_timeout(normal.max(std::time::Duration::from_secs(3600)));
+    let r = s.call(req);
+    s.set_timeout(normal);
+    Ok(r?)
+}
+
 fn remote_manifest(s: &mut Session, ignore: devsync_proto::IgnoreSpec) -> Result<Vec<Entry>> {
-    match s.call(&Request::Manifest { ignore })? {
+    match scan_call(s, &Request::Manifest { ignore })? {
         Response::Manifest(m) => Ok(m),
         other => Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
     }
@@ -420,7 +431,7 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
     let mut local = local_manifest(p)?;
     rep.event(Event::Connecting { host: p.host_label() });
     let mut s = p.connect()?;
-    let remote = match s.call(&Request::Manifest { ignore: p.ignore_spec() })? {
+    let remote = match scan_call(&mut s, &Request::Manifest { ignore: p.ignore_spec() })? {
         Response::Manifest(m) => m,
         other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
     };
@@ -576,7 +587,7 @@ pub struct PullBackStats {
 
 fn pull_back_once(p: &Project, rep: &dyn Reporter, job_id: &str) -> Result<PullBackStats> {
     let mut s = p.connect()?;
-    let changed = match s.call(&Request::JobChanges { id: job_id.to_string(), ignore: p.ignore_spec() })? {
+    let changed = match scan_call(&mut s, &Request::JobChanges { id: job_id.to_string(), ignore: p.ignore_spec() })? {
         Response::Changes(c) => c,
         other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
     };
@@ -624,7 +635,7 @@ pub fn pull(p: &Project, rep: &dyn Reporter, rel: &str, dest_root: Option<&Path>
         let mut s = p.connect()?;
         // Explicit pulls ignore the sync excludes: if you ask for it, you get it.
         let spec = devsync_proto::IgnoreSpec { use_gitignore: false, patterns: Vec::new() };
-        let all = match s.call(&Request::Manifest { ignore: spec })? {
+        let all = match scan_call(&mut s, &Request::Manifest { ignore: spec })? {
             Response::Manifest(m) => m,
             other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
         };

@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A broken shared (multiplexed) ssh connection no longer causes an endless
+  "exit code 255" retry loop: devsync closes it and connects directly.
+- Large remote projects: scans may take up to an hour instead of timing out
+  after 120 s, and the hash cache is checkpointed every 10 s so an
+  interrupted first scan resumes instead of starting over.
 - Connections no longer break when the remote shell's startup files print
   text or binary bytes ("frame too large"): the agent now sends a greeting,
   and the client skips anything before it and sends nothing until it

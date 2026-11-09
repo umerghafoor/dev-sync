@@ -1,7 +1,13 @@
 //! Endpoint description and the commands used to reach it.
 
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+
+/// Set once a shared (multiplexed) connection misbehaved in this process;
+/// later sessions then connect directly.
+static MUX_DISABLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SshConfig {
@@ -42,6 +48,43 @@ impl SshConfig {
         PathBuf::from(format!("/tmp/devsync-{uid}"))
     }
 
+    /// Whether sessions currently go through a shared connection.
+    pub fn mux_active(&self) -> bool {
+        self.multiplex && !MUX_DISABLED.load(Ordering::SeqCst)
+    }
+
+    /// A shared connection can break silently (network change, dead TCP,
+    /// server session limit): every session through it then fails with exit
+    /// 255 and no message. Shut it down and connect directly from now on.
+    pub fn drop_shared_connection(&self) {
+        if !self.mux_active() {
+            return;
+        }
+        MUX_DISABLED.store(true, Ordering::SeqCst);
+        tracing::info!("shared ssh connection failed; closing it and connecting directly");
+        let mut c = Command::new(&self.ssh_bin);
+        c.arg("-o").arg(format!("ControlPath={}/%C", Self::control_dir().display()));
+        if let Some(p) = self.port {
+            c.arg("-p").arg(p.to_string());
+        }
+        for o in &self.options {
+            c.arg("-o").arg(o);
+        }
+        c.arg("-O").arg("exit").arg(&self.host);
+        c.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        if let Ok(mut child) = c.spawn() {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < deadline {
+                if let Ok(Some(_)) = child.try_wait() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
     /// Base ssh invocation with keepalives, timeouts and no interactive prompts.
     pub fn command(&self) -> Command {
         let mut c = Command::new(&self.ssh_bin);
@@ -56,7 +99,7 @@ impl SshConfig {
         if let Some(i) = &self.identity {
             c.arg("-i").arg(i);
         }
-        if self.multiplex {
+        if self.mux_active() {
             let dir = Self::control_dir();
             if std::fs::create_dir_all(&dir).is_ok() {
                 use std::os::unix::fs::PermissionsExt;

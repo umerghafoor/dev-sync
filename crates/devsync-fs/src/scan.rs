@@ -127,7 +127,12 @@ fn entry_for(path: &Path, rel: String, md: &Metadata, cache: &mut HashCache) -> 
 /// are logged and skipped rather than failing the whole scan.
 pub fn scan(root: &Path, spec: &IgnoreSpec, cache: &mut HashCache) -> Result<Vec<Entry>, FsError> {
     let mut out = Vec::new();
+    let mut last_checkpoint = std::time::Instant::now();
     for item in walker(root, spec)? {
+        if last_checkpoint.elapsed() > std::time::Duration::from_secs(10) {
+            cache.checkpoint();
+            last_checkpoint = std::time::Instant::now();
+        }
         let dent = match item {
             Ok(d) => d,
             Err(e) => {
@@ -229,6 +234,19 @@ mod tests {
         assert_eq!(m[0].kind, EntryKind::Symlink);
         assert_eq!(m[0].link.as_deref(), Some("run.sh"));
         assert_eq!(m[1].mode & 0o111, 0o111);
+    }
+
+    #[test]
+    fn checkpoint_keeps_progress() {
+        let d = tempfile::tempdir().unwrap();
+        let file = d.path().join("cache.bin");
+        let mut c = HashCache::load(&file);
+        c.put("a", 1, 1, [1; 32]);
+        c.checkpoint();
+        // An interrupted scan never calls save(); the checkpoint survives.
+        drop(c);
+        let c = HashCache::load(&file);
+        assert_eq!(c.get("a", 1, 1), Some([1; 32]));
     }
 
     #[test]

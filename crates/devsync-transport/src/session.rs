@@ -228,6 +228,10 @@ impl Session {
         })
     }
 
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+
     pub fn set_timeout(&mut self, t: Duration) {
         self.timeout = t;
     }
@@ -327,34 +331,44 @@ pub fn connect(target: &Target, opts: &ConnectOptions) -> Result<Session, Transp
                 Err(Handshake::Failed(e)) => Err(e),
             }
         }
-        Endpoint::Ssh(ssh) => {
-            let cache = opts.cache_file.as_deref();
-            if let Some(name) = load_cache(cache).and_then(|c| c.agent_name) {
-                let s = Session::spawn(ssh_agent_command(ssh, &name, &target.root), opts.timeout)?;
-                match s.handshake() {
-                    Ok(mut s) => {
-                        s.info.agent_name = Some(name);
-                        return Ok(s);
-                    }
-                    Err(Handshake::Failed(e)) => return Err(e),
-                    Err(Handshake::AgentMissing) => {
-                        tracing::info!("cached agent {name} missing on remote; redeploying")
-                    }
-                }
+        Endpoint::Ssh(ssh) => match connect_ssh(ssh, target, opts) {
+            // A broken shared connection fails every session through it;
+            // retry right away with a direct connection.
+            Err(e) if e.is_transient() && ssh.mux_active() => {
+                ssh.drop_shared_connection();
+                connect_ssh(ssh, target, opts)
             }
-            let name = deploy::ensure_agent(ssh)?;
-            let s = Session::spawn(ssh_agent_command(ssh, &name, &target.root), opts.timeout)?;
-            match s.handshake() {
-                Ok(mut s) => {
-                    s.info.agent_name = Some(name);
-                    save_cache(cache, &s.info);
-                    Ok(s)
-                }
-                Err(Handshake::AgentMissing) => Err(TransportError::Deploy(
-                    "agent was uploaded but cannot be executed on the remote (noexec home? wrong architecture?)".into(),
-                )),
-                Err(Handshake::Failed(e)) => Err(e),
+            other => other,
+        },
+    }
+}
+
+fn connect_ssh(ssh: &SshConfig, target: &Target, opts: &ConnectOptions) -> Result<Session, TransportError> {
+    let cache = opts.cache_file.as_deref();
+    if let Some(name) = load_cache(cache).and_then(|c| c.agent_name) {
+        let s = Session::spawn(ssh_agent_command(ssh, &name, &target.root), opts.timeout)?;
+        match s.handshake() {
+            Ok(mut s) => {
+                s.info.agent_name = Some(name);
+                return Ok(s);
+            }
+            Err(Handshake::Failed(e)) => return Err(e),
+            Err(Handshake::AgentMissing) => {
+                tracing::info!("cached agent {name} missing on remote; redeploying")
             }
         }
+    }
+    let name = deploy::ensure_agent(ssh)?;
+    let s = Session::spawn(ssh_agent_command(ssh, &name, &target.root), opts.timeout)?;
+    match s.handshake() {
+        Ok(mut s) => {
+            s.info.agent_name = Some(name);
+            save_cache(cache, &s.info);
+            Ok(s)
+        }
+        Err(Handshake::AgentMissing) => Err(TransportError::Deploy(
+            "agent was uploaded but cannot be executed on the remote (noexec home? wrong architecture?)".into(),
+        )),
+        Err(Handshake::Failed(e)) => Err(e),
     }
 }

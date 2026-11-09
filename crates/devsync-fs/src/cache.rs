@@ -29,6 +29,7 @@ pub struct HashCache {
     old: Data,
     new: HashMap<String, Item>,
     dirty: bool,
+    since_checkpoint: usize,
 }
 
 pub fn now_ns() -> i128 {
@@ -45,7 +46,7 @@ impl HashCache {
     pub fn load(file: impl Into<PathBuf>) -> Self {
         let file = file.into();
         let old = std::fs::read(&file).ok().and_then(|b| postcard::from_bytes::<Data>(&b).ok()).unwrap_or_default();
-        Self { file: Some(file), old, new: HashMap::new(), dirty: false }
+        Self { file: Some(file), old, new: HashMap::new(), dirty: false, since_checkpoint: 0 }
     }
 
     pub fn get(&self, rel: &str, size: u64, mtime_ns: i128) -> Option<Hash> {
@@ -60,7 +61,45 @@ impl HashCache {
         let changed =
             self.old.items.get(rel).is_none_or(|o| o.size != size || o.mtime_ns != mtime_ns || o.hash != hash);
         self.dirty |= changed;
+        self.since_checkpoint += usize::from(changed);
         self.new.insert(rel.to_string(), Item { size, mtime_ns, hash });
+    }
+
+    /// Saves progress in the middle of a long scan: entries seen so far plus
+    /// older ones not yet revisited. Interrupted scans (timeouts, dropped
+    /// connections) then resume instead of re-hashing everything.
+    pub fn checkpoint(&mut self) {
+        let Some(file) = &self.file else { return };
+        if self.since_checkpoint == 0 {
+            return;
+        }
+        struct Merged<'a>(&'a HashMap<String, Item>, &'a HashMap<String, Item>);
+        impl Serialize for Merged<'_> {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                use serde::ser::SerializeMap;
+                let (old, new) = (self.0, self.1);
+                let extra = old.keys().filter(|k| !new.contains_key(*k)).count();
+                let mut m = s.serialize_map(Some(new.len() + extra))?;
+                for (k, v) in new {
+                    m.serialize_entry(k, v)?;
+                }
+                for (k, v) in old.iter().filter(|(k, _)| !new.contains_key(*k)) {
+                    m.serialize_entry(k, v)?;
+                }
+                m.end()
+            }
+        }
+        // Same layout as `Data`, without copying the maps.
+        #[derive(Serialize)]
+        struct Out<'a> {
+            written_at_ns: i128,
+            items: Merged<'a>,
+        }
+        let out = Out { written_at_ns: now_ns(), items: Merged(&self.old.items, &self.new) };
+        if let Ok(bytes) = postcard::to_allocvec(&out) {
+            let _ = write_atomic(file, &bytes);
+        }
+        self.since_checkpoint = 0;
     }
 
     /// Persists entries recorded since load (atomically). Errors are ignored:

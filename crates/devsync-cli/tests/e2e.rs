@@ -214,6 +214,8 @@ fn fake_ssh(dir: &Path, home: &Path) -> PathBuf {
     let script = format!(
         r#"#!/bin/sh
 [ -f "{down}" ] && {{ echo "ssh: connect to host box: Network is unreachable" >&2; exit 255; }}
+# A broken shared (multiplexed) connection: sessions through it die silently.
+case " $* " in *ControlMaster=auto*) [ -n "$FAKE_SSH_BROKEN_MUX" ] && exit 255 ;; esac
 while [ $# -gt 0 ]; do
   case "$1" in
     -o|-p|-i|-L|-O) shift 2 ;;
@@ -464,4 +466,33 @@ fn pull_specific_files_and_folders_and_list_remote() {
     let o = devsync(&env.local, &["pull", "does/not/exist"]);
     assert!(!o.status.success());
     assert!(String::from_utf8_lossy(&o.stderr).contains("nothing on the remote at does/not/exist"));
+}
+
+#[test]
+fn broken_shared_ssh_connection_falls_back_to_direct() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let home = base.join("remote-home");
+    let local = base.join("local");
+    fs::create_dir_all(&home).unwrap();
+    fs::create_dir_all(&local).unwrap();
+    let ssh = fake_ssh(&base, &home);
+    let run = |args: &[&str]| -> Output {
+        Command::new(bin())
+            .args(args)
+            .current_dir(&local)
+            .env("NO_COLOR", "1")
+            .env("DEVSYNC_SSH", &ssh)
+            .env("FAKE_SSH_BROKEN_MUX", "1")
+            .output()
+            .unwrap()
+    };
+    // Multiplexing stays on (the default); every multiplexed session fails.
+    ok(&run(&["init", "me@box:~/proj"]));
+    let cfg = local.join(".devsync.toml");
+    fs::write(&cfg, fs::read_to_string(&cfg).unwrap().replace("retries = 0", "retries = 2")).unwrap();
+    write(&local.join("hi.sh"), "echo direct works");
+    let o = run(&["exec", "--", "sh hi.sh"]);
+    assert_eq!(ok(&o), "direct works\n");
+    assert!(!String::from_utf8_lossy(&o.stderr).contains("retry #"), "no retry loop needed");
 }
