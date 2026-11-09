@@ -12,7 +12,8 @@ crates/
   devsync-cli/        the `devsync` binary (client and agent) + e2e tests
 extensions/vscode/    VS Code extension (TypeScript)
 docs/                 this book (mdBook)
-scripts/              install, docs generation, version bump
+install.sh            installer (one-liner, release archives, source checkouts)
+scripts/              docs generation, version bump, CI helpers
 legacy/               original bash prototype (reference only)
 ```
 

@@ -58,20 +58,24 @@ running command.
 Requirements: ssh access to the remote without a password prompt
 (`ssh you@server true` works). Nothing needs to be installed there.
 
-**Install** (from a [release](https://github.com/OWNER/devsync/releases) archive, or from source with Rust 1.88+):
+**Install** (macOS and Linux):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh
+```
+
+The installer downloads the latest release for your machine, verifies its
+checksum, installs to `~/.local/bin`, adds it to your `PATH`, and installs the
+VS Code extension if `code` is available. Or build from source (Rust 1.88+):
 
 ```bash
 git clone https://github.com/OWNER/devsync.git
 cd devsync
-make install
+sh install.sh
 ```
 
-If `devsync` is then not found, add `~/.local/bin` to your `PATH`:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-```
+Then open a new terminal. Options: `sh install.sh --help`; to remove:
+`sh install.sh --uninstall`.
 
 **Use it** in your project:
 

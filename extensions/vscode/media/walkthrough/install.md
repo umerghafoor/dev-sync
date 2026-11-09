@@ -2,12 +2,18 @@
 
 The extension is a front end for the `devsync` command-line tool.
 
-**From source** (needs Rust):
+**One line** (macOS and Linux):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh
+```
+
+**Or from source** (needs Rust):
 
 ```bash
 git clone <devsync repository>
 cd devsync
-make install
+sh install.sh
 ```
 
 This puts `devsync` in `~/.local/bin`. The extension finds it there even if

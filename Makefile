@@ -62,7 +62,7 @@ dist: client agents
 	@for t in $(AGENT_TRIPLES); do \
 		install -m 755 target/$$t/release/devsync dist/$(DIST_NAME)/share/devsync/agents/devsync-$$t; \
 	done
-	cp README.md LICENSE CHANGELOG.md scripts/install.sh dist/$(DIST_NAME)/
+	cp README.md LICENSE CHANGELOG.md install.sh dist/$(DIST_NAME)/
 	tar -C dist -czf dist/$(DIST_NAME).tar.gz $(DIST_NAME)
 	@echo "dist/$(DIST_NAME).tar.gz"
 

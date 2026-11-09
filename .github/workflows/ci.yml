@@ -118,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: shellcheck scripts/*.sh scripts/ci/*.sh
+      - run: shellcheck install.sh scripts/*.sh scripts/ci/*.sh
 
   vscode:
     name: VS Code extension

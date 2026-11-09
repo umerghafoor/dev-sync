@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `devsync changes`: git-status-like list of local changes not yet on the
   remote (`--json` supported).
 - Project logo.
+- `install.sh`: one-line installer (`curl … | sh`) that downloads the right
+  release, verifies its checksum, sets up `PATH`, installs the VS Code
+  extension, and supports `--version`, `--prefix`, `--uninstall`; it also
+  installs from release archives and builds source checkouts.
 
 ### Changed
 

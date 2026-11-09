@@ -39,7 +39,7 @@ ssh you@server true
 ## `no devsync build for remote platform linux/x86_64`
 
 The agent binaries for the remote aren't installed next to your devsync. From
-a source checkout, run `make install` (it builds them), or set
+a source checkout, run `sh install.sh` (it builds them), or set
 `DEVSYNC_AGENT_DIR` to a folder containing `devsync-x86_64-unknown-linux-musl`.
 
 ## `agent was uploaded but cannot be executed`

@@ -24,9 +24,11 @@ Source Control view. Built for connections that drop.
 
 ## Setup
 
-1. **Install the `devsync` command** (once). From the devsync repository:
-   `make install`. This puts it in `~/.local/bin`, which the extension finds
-   automatically.
+1. **Install the `devsync` command** (once):
+   `curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh`
+   (or `sh install.sh` in a source checkout). This puts it in `~/.local/bin`,
+   which the extension finds automatically. If VS Code's `code` command is
+   available, the installer installs this extension too.
 2. **Make sure ssh works without a password:** `ssh you@server true`. If it
    prompts, run `ssh-keygen -t ed25519` and then `ssh-copy-id you@server`.
 3. **Open your project folder** in VS Code.
@@ -77,7 +79,7 @@ Project options (remote host, excludes, environment, ports) live in
 
 ## Troubleshooting
 
-- **"devsync command-line tool was not found"**: install it (`make install`),
+- **"devsync command-line tool was not found"**: install it (`sh install.sh`),
   or set `devsync.binaryPath` to its full path.
 - **Status bar shows ☁ offline**: changes are queued. Run **devsync: Run
   Doctor** to see why the remote can't be reached.
