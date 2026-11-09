@@ -38,13 +38,20 @@ pub struct PushStats {
 pub struct Snapshot {
     path: PathBuf,
     map: HashMap<String, Hash>,
+    /// False until this machine has completed a sync with the remote.
+    existed: bool,
 }
 
 impl Snapshot {
     pub fn load(p: &Project) -> Self {
         let path = p.state_dir().join("synced.v2.bin");
-        let map = fs::read(&path).ok().and_then(|b| postcard::from_bytes(&b).ok()).unwrap_or_default();
-        Self { path, map }
+        let saved: Option<HashMap<String, Hash>> = fs::read(&path).ok().and_then(|b| postcard::from_bytes(&b).ok());
+        Self { path, existed: saved.is_some(), map: saved.unwrap_or_default() }
+    }
+
+    /// Whether this machine has synced with the remote before.
+    pub fn existed(&self) -> bool {
+        self.existed
     }
 
     pub fn get(&self, rel: &str) -> Option<&Hash> {
@@ -191,15 +198,74 @@ fn read_full(f: &mut fs::File, buf: &mut [u8]) -> std::io::Result<usize> {
     Ok(n)
 }
 
+/// First sync from this machine: bring down what only the remote has, so
+/// connecting a new or empty folder to an existing remote project starts
+/// from the remote's code instead of overwriting or deleting it. Files that
+/// differ on both sides keep the local version; the remote one is saved as
+/// `<file>.devsync-remote`. Returns the number of files written.
+fn initial_pull(
+    s: &mut Session,
+    p: &Project,
+    rep: &dyn Reporter,
+    local: &[Entry],
+    remote: &[Entry],
+    dry_run: bool,
+) -> Result<usize> {
+    let local_map: HashMap<&str, &Entry> = local.iter().map(|e| (e.path.as_str(), e)).collect();
+    let mut only_remote = Vec::new();
+    let mut differ = Vec::new();
+    for e in remote {
+        match local_map.get(e.path.as_str()) {
+            None => only_remote.push(e),
+            Some(l) if !devsync_fs::diff::same(l, e) => differ.push(e),
+            Some(_) => {}
+        }
+    }
+    if only_remote.is_empty() && differ.is_empty() {
+        return Ok(0);
+    }
+    let both = if differ.is_empty() {
+        String::new()
+    } else {
+        format!(", and keeping {} local file(s) that differ (remote versions saved as *.devsync-remote)", differ.len())
+    };
+    rep.event(Event::Info {
+        message: format!(
+            "first sync with this remote: {} {} file(s) that exist only there{both}",
+            if dry_run { "would download" } else { "downloading" },
+            only_remote.len()
+        ),
+    });
+    if dry_run {
+        return Ok(0);
+    }
+    for e in &only_remote {
+        download(s, &p.root, e, &p.root.join(&e.path))?;
+        rep.event(Event::Pulled { path: e.path.clone() });
+    }
+    for e in &differ {
+        let alt = format!("{}.devsync-remote", e.path);
+        download(s, &p.root, e, &p.root.join(&alt))?;
+        rep.event(Event::Conflict { path: e.path.clone(), saved_as: alt });
+    }
+    Ok(only_remote.len() + differ.len())
+}
+
 fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushStats> {
     let started = Instant::now();
-    let local = local_manifest(p)?;
+    let mut local = local_manifest(p)?;
     rep.event(Event::Connecting { host: p.host_label() });
     let mut s = p.connect()?;
     let remote = match s.call(&Request::Manifest { ignore: p.ignore_spec() })? {
         Response::Manifest(m) => m,
         other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
     };
+    if p.config.sync.initial_pull && !remote.is_empty() && !Snapshot::load(p).existed() {
+        let pulled = initial_pull(&mut s, p, rep, &local, &remote, opts.dry_run)?;
+        if pulled > 0 {
+            local = local_manifest(p)?;
+        }
+    }
     let plan = devsync_fs::plan(&local, &remote, p.config.sync.delete);
     rep.event(Event::Planned {
         upload: plan.upload.len(),

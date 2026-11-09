@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commands), "Not on Remote Yet", Conflicts and Remote Jobs, plus a count
   badge on the icon; ⌘⌥D / Ctrl+Alt+D focuses it; `devsync.sourceControl`
   setting.
+- First sync from a new machine downloads files that exist only on the remote
+  (differing files are kept locally; the remote copy is saved as
+  `<file>.devsync-remote`), so an empty folder can be connected to an existing
+  remote project. Disable with `sync.initial_pull = false`.
 - `devsync changes`: git-status-like list of local changes not yet on the
   remote (`--json` supported).
 - Project logo.

@@ -15,6 +15,9 @@ This writes `.devsync.toml` (commit it if your team shares the remote; it is
 never sent to the remote) and, if the project uses git, adds `.devsync/` to
 `.gitignore`.
 
+If the remote folder already has the project, your first sync downloads it
+into this folder before sending anything back.
+
 ## 2. Check the setup
 
 ```bash

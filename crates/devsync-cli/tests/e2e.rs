@@ -315,3 +315,55 @@ fn changes_lists_unsynced_files_like_git_status() {
     let out = ok(&devsync(&env.local, &["changes"]));
     assert!(out.contains("D b.txt"), "{out}");
 }
+
+#[test]
+fn first_sync_pulls_existing_remote_code_into_new_folder() {
+    let env = setup();
+    // The remote already holds the project.
+    write(&env.remote.join("src/app.py"), "print('remote')");
+    write(&env.remote.join("README.md"), "remote readme");
+    write(&env.remote.join("shared.txt"), "remote version");
+    write(&env.remote.join("node_modules/dep/index.js"), "dep");
+    // The new local folder only has one file of its own.
+    write(&env.local.join("shared.txt"), "local version");
+
+    let o = devsync(&env.local, &["push"]);
+    let err = String::from_utf8_lossy(&o.stderr).to_string();
+    ok(&o);
+    assert!(err.contains("first sync"), "{err}");
+
+    // Remote-only files came down first…
+    assert_eq!(fs::read_to_string(env.local.join("src/app.py")).unwrap(), "print('remote')");
+    assert_eq!(fs::read_to_string(env.local.join("README.md")).unwrap(), "remote readme");
+    assert!(!env.local.join("node_modules").exists(), "excluded paths are not pulled");
+    // …a file present on both sides keeps the local version, the remote one is preserved…
+    assert_eq!(fs::read_to_string(env.local.join("shared.txt")).unwrap(), "local version");
+    assert_eq!(fs::read_to_string(env.local.join("shared.txt.devsync-remote")).unwrap(), "remote version");
+    // …and then local changes were sent as usual.
+    assert_eq!(fs::read_to_string(env.remote.join("shared.txt")).unwrap(), "local version");
+    assert!(!env.remote.join("shared.txt.devsync-remote").exists());
+    assert!(ok(&devsync(&env.local, &["changes"])).contains("nothing to push"));
+
+    // Only the first sync pulls; afterwards sync is one-way again.
+    write(&env.remote.join("later.txt"), "made on the remote");
+    ok(&devsync(&env.local, &["push"]));
+    assert!(!env.local.join("later.txt").exists());
+}
+
+#[test]
+fn initial_pull_protects_remote_from_deletion_and_can_be_disabled() {
+    // With delete on, an empty folder must not wipe an existing remote project.
+    let env = setup();
+    set_config(&env, "delete = false", "delete = true");
+    write(&env.remote.join("keep.txt"), "important");
+    ok(&devsync(&env.local, &["push"]));
+    assert!(env.remote.join("keep.txt").exists());
+    assert!(env.local.join("keep.txt").exists());
+
+    // Opting out: nothing is downloaded.
+    let env = setup();
+    set_config(&env, "initial_pull = true", "initial_pull = false");
+    write(&env.remote.join("remote-only.txt"), "x");
+    ok(&devsync(&env.local, &["push"]));
+    assert!(!env.local.join("remote-only.txt").exists());
+}

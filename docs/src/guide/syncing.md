@@ -22,6 +22,29 @@ devsync push -v           # list every file as it is sent
 devsync status            # pending local changes, link state, running jobs
 ```
 
+## Connecting to a remote that already has code
+
+If the remote folder already contains the project (say you cloned it there,
+or another machine has been syncing to it), the **first sync from a new
+machine downloads the remote's code first**:
+
+- files that exist only on the remote are copied to your folder;
+- if a file exists on both sides with different content, your local version
+  is kept and sent to the remote, and the remote's version is saved next to it
+  as `<file>.devsync-remote` so nothing is lost;
+- excluded paths (`node_modules`, `.venv`, …) are not downloaded.
+
+After that first sync, syncing is one-way again, from your machine to the
+remote. This also means connecting an empty folder never wipes an existing
+remote project, even with `delete = true`. To start from your local files
+only, set `sync.initial_pull = false` before the first sync.
+
+```bash
+devsync push --dry-run
+```
+
+This shows what the first sync would download.
+
 ## What is synced
 
 Everything in the project directory except:

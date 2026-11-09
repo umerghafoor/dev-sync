@@ -32,6 +32,7 @@ Login must not prompt: devsync runs ssh with `BatchMode=yes`.
 | --- | --- | --- |
 | `use_gitignore` | `false` | `false`: files matched by `.gitignore` (`.env`, local configs, data) are synced. `true`: they are skipped |
 | `ignore` | `[]` | Extra exclude patterns (gitignore syntax) |
+| `initial_pull` | `true` | On this machine's first sync, download files that exist only on the remote (differing files are kept locally and saved as `<file>.devsync-remote`) before pushing |
 | `delete` | `false` | Delete remote files that were deleted locally |
 | `max_delete` | `200` | Refuse larger deletions unless `devsync push --force` |
 | `retries` | `0` | Attempts for network operations; `0` retries until the link is back |

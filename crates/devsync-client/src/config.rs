@@ -46,6 +46,9 @@ pub struct SyncConfig {
     pub use_gitignore: bool,
     /// Extra exclude patterns (gitignore syntax).
     pub ignore: Vec<String>,
+    /// On this machine's first sync, download files that exist only on the
+    /// remote before sending local changes.
+    pub initial_pull: bool,
     /// Remove remote files that were deleted locally.
     pub delete: bool,
     /// Refuse to delete more than this many files without `--force`.
@@ -88,7 +91,14 @@ impl Default for SshSection {
 
 impl Default for SyncConfig {
     fn default() -> Self {
-        Self { use_gitignore: false, ignore: Vec::new(), delete: false, max_delete: 200, retries: 0 }
+        Self {
+            use_gitignore: false,
+            ignore: Vec::new(),
+            initial_pull: true,
+            delete: false,
+            max_delete: 200,
+            retries: 0,
+        }
     }
 }
 
@@ -148,6 +158,7 @@ response_timeout_secs = 120
 [sync]
 use_gitignore = false        # false: .gitignore'd files (.env, data, configs) are synced too
 ignore = []                  # extra excludes, e.g. ["dist/", "*.log"]; also see .devsyncignore
+initial_pull = true          # first sync: download what only the remote has, before pushing
 delete = false              # remove remote files deleted locally
 max_delete = 200             # safety cap for deletions without --force
 retries = 0                  # 0 = keep retrying until the network is back
