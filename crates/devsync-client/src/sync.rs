@@ -79,15 +79,51 @@ pub fn local_manifest(p: &Project) -> Result<Vec<Entry>> {
 
 /// Files that differ from what was last synced (no network needed).
 pub fn pending(p: &Project) -> Result<Vec<String>> {
+    Ok(changes(p)?.into_iter().map(|c| c.path).collect())
+}
+
+/// How a local file differs from what the remote last received.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChangeKind {
+    Added,
+    Modified,
+    Deleted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Change {
+    pub path: String,
+    pub status: ChangeKind,
+}
+
+/// Local changes not yet on the remote, like `git status` (no network).
+/// Deletions are listed only when `sync.delete` is on, since otherwise
+/// they are never propagated.
+pub fn changes(p: &Project) -> Result<Vec<Change>> {
     let snap = Snapshot::load(p);
     let local = local_manifest(p)?;
-    let mut out: Vec<String> =
-        local.iter().filter(|e| snap.get(&e.path) != Some(&e.hash)).map(|e| e.path.clone()).collect();
-    let present: std::collections::HashSet<&str> = local.iter().map(|e| e.path.as_str()).collect();
+    let mut out: Vec<Change> = local
+        .iter()
+        .filter_map(|e| {
+            match snap.get(&e.path) {
+                None => Some(ChangeKind::Added),
+                Some(h) if h != &e.hash => Some(ChangeKind::Modified),
+                Some(_) => None,
+            }
+            .map(|status| Change { path: e.path.clone(), status })
+        })
+        .collect();
     if p.config.sync.delete {
-        out.extend(snap.map.keys().filter(|k| !present.contains(k.as_str())).cloned());
+        let present: std::collections::HashSet<&str> = local.iter().map(|e| e.path.as_str()).collect();
+        out.extend(
+            snap.map
+                .keys()
+                .filter(|k| !present.contains(k.as_str()))
+                .map(|k| Change { path: k.clone(), status: ChangeKind::Deleted }),
+        );
     }
-    out.sort();
+    out.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(out)
 }
 

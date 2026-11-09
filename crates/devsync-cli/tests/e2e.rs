@@ -287,3 +287,31 @@ fn ssh_transport_deploys_agent_and_recovers_from_outage() {
     assert_eq!(ok(&o), "back online\n");
     assert!(String::from_utf8_lossy(&o.stderr).contains("retry"));
 }
+
+#[test]
+fn changes_lists_unsynced_files_like_git_status() {
+    let env = setup();
+    write(&env.local.join("a.txt"), "1");
+    write(&env.local.join("b.txt"), "1");
+    let out = ok(&devsync(&env.local, &["changes"]));
+    assert!(out.contains("A a.txt") && out.contains("A b.txt"), "{out}");
+
+    ok(&devsync(&env.local, &["push"]));
+    assert!(ok(&devsync(&env.local, &["changes"])).contains("nothing to push"));
+
+    write(&env.local.join("a.txt"), "2");
+    write(&env.local.join("c.txt"), "new");
+    fs::remove_file(env.local.join("b.txt")).unwrap();
+    let v: serde_json::Value = serde_json::from_str(ok(&devsync(&env.local, &["--json", "changes"])).trim()).unwrap();
+    let got: Vec<(String, String)> = v["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| (c["path"].as_str().unwrap().to_string(), c["status"].as_str().unwrap().to_string()))
+        .collect();
+    // Deletions only count when they would be propagated.
+    assert_eq!(got, vec![("a.txt".into(), "modified".into()), ("c.txt".into(), "added".into())]);
+    set_config(&env, "delete = false", "delete = true");
+    let out = ok(&devsync(&env.local, &["changes"]));
+    assert!(out.contains("D b.txt"), "{out}");
+}

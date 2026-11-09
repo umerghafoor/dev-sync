@@ -105,6 +105,8 @@ pub enum Cmd {
     },
     /// Configuration, connectivity and pending changes.
     Status,
+    /// Local changes not yet on the remote, like `git status` (no network).
+    Changes,
     /// Check the whole setup end to end and explain problems.
     Doctor,
     /// Forward remote ports to localhost (reconnects automatically).

@@ -20,6 +20,7 @@ current directory and its parents.
 | [`collect`](#devsync-collect) | Fetch output of running jobs into .devsync/jobs/ once, then exit |
 | [`pull`](#devsync-pull) | Copy a file or directory from the remote project |
 | [`status`](#devsync-status) | Configuration, connectivity and pending changes |
+| [`changes`](#devsync-changes) | Local changes not yet on the remote, like `git status` (no network) |
 | [`doctor`](#devsync-doctor) | Check the whole setup end to end and explain problems |
 | [`forward`](#devsync-forward) | Forward remote ports to localhost (reconnects automatically) |
 | [`shell`](#devsync-shell) | Interactive shell in the matching remote directory |
@@ -45,6 +46,7 @@ Commands:
   collect      Fetch output of running jobs into .devsync/jobs/ once, then exit
   pull         Copy a file or directory from the remote project
   status       Configuration, connectivity and pending changes
+  changes      Local changes not yet on the remote, like `git status` (no network)
   doctor       Check the whole setup end to end and explain problems
   forward      Forward remote ports to localhost (reconnects automatically)
   shell        Interactive shell in the matching remote directory
@@ -246,6 +248,21 @@ Options:
 Configuration, connectivity and pending changes
 
 Usage: devsync status [OPTIONS]
+
+Options:
+  -C, --dir <DIR>  Run as if started in this directory
+      --json       Machine-readable output (NDJSON events / JSON results)
+  -v, --verbose    Show every file transferred and connection details
+  -q, --quiet      Only errors and warnings
+  -h, --help       Print help
+```
+
+## devsync changes
+
+```text
+Local changes not yet on the remote, like `git status` (no network)
+
+Usage: devsync changes [OPTIONS]
 
 Options:
   -C, --dir <DIR>  Run as if started in this directory

@@ -69,6 +69,7 @@ pub fn run(cli: Cli) -> i32 {
         Cmd::Collect => collect(&g),
         Cmd::Pull { path, dest } => pull(&g, &path, dest.as_deref()),
         Cmd::Status => status(&g),
+        Cmd::Changes => changes(&g),
         Cmd::Doctor => doctor(&g),
         Cmd::Forward { ports } => forward(&g, ports),
         Cmd::Shell => shell(),
@@ -437,6 +438,27 @@ fn collect(g: &Global) -> Result<i32> {
 }
 
 // ------------------------------------------------------------ diagnostics
+
+fn changes(g: &Global) -> Result<i32> {
+    let p = project()?;
+    let list = sync::changes(&p)?;
+    if g.json {
+        print_json(json!({"root": p.root, "changes": list}));
+        return Ok(0);
+    }
+    if list.is_empty() {
+        println!("nothing to push: the remote has all local changes");
+    }
+    for c in &list {
+        let letter = match c.status {
+            sync::ChangeKind::Added => 'A',
+            sync::ChangeKind::Modified => 'M',
+            sync::ChangeKind::Deleted => 'D',
+        };
+        println!("{letter} {}", c.path);
+    }
+    Ok(0)
+}
 
 fn status(g: &Global) -> Result<i32> {
     let p = project()?;

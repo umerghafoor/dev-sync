@@ -8,7 +8,7 @@ set -eu
 bin=${1:-target/debug/devsync}
 [ -x "$bin" ] || { echo "error: $bin not found; run cargo build first" >&2; exit 1; }
 
-commands="init push watch exec submit logs jobs kill collect pull status doctor forward shell setup completions"
+commands="init push watch exec submit logs jobs kill collect pull status changes doctor forward shell setup completions"
 
 cat <<'EOF'
 # Command line
