@@ -1,0 +1,11 @@
+[package]
+name = "devsync-proto"
+description = "Wire protocol shared by the devsync client and remote agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+bincode.workspace = true
+thiserror.workspace = true
