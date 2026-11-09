@@ -27,6 +27,11 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
     ".ruff_cache",
     ".DS_Store",
     ".idea",
+    // devsync's own conflict copies and in-flight temp files
+    "*.devsync-remote",
+    "*.devsync-tmp",
+    "*.devsync-dl",
+    "*.devsync-ln",
 ];
 
 /// Per-directory ignore file understood by devsync (gitignore syntax).
@@ -183,6 +188,7 @@ mod tests {
             ("pkg/__pycache__/m.pyc", "x"),
             ("data/big.csv", "1,2"),
             ("logs/a.log", "x"),
+            ("src/main.py.devsync-remote", "conflict copy"),
         ] {
             fs::create_dir_all(r.join(p).parent().unwrap()).unwrap();
             fs::write(r.join(p), c).unwrap();

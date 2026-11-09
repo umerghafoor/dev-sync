@@ -38,7 +38,7 @@ Login must not prompt: devsync runs ssh with `BatchMode=yes`.
 
 Always excluded: `.git`, `.hg`, `.svn`, `.devsync`, `.devsync-agent`,
 `node_modules`, `__pycache__`, `*.pyc`, `.venv`, `venv`, `.mypy_cache`,
-`.pytest_cache`, `.ruff_cache`, `.DS_Store`, `.idea`.
+`.pytest_cache`, `.ruff_cache`, `.DS_Store`, `.idea`, and devsync's own conflict copies (`*.devsync-remote`) and temp files.
 
 `.devsyncignore` files (gitignore syntax, any directory) add more excludes.
 Excluded files are left alone on the remote, even with `delete = true`.
