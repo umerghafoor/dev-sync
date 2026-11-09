@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.svg text
+*.png binary
+*.vsix binary
+Cargo.lock linguist-generated=true
+extensions/vscode/package-lock.json linguist-generated=true
+docs/src/reference/cli.md linguist-generated=true
+legacy/** linguist-documentation=true

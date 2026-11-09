@@ -1,0 +1,72 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please check the [troubleshooting guide](https://github.com/OWNER/devsync/blob/main/docs/src/troubleshooting.md) first.
+        **Security issues:** do not file them here; see SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. devsync init me@box:~/proj
+        2. devsync exec -- ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output with -v
+      description: Run the failing command with `-v` (or `DEVSYNC_LOG=debug`) and paste the output.
+      render: text
+  - type: textarea
+    id: doctor
+    attributes:
+      label: devsync doctor
+      description: Output of `devsync doctor` in the project.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: devsync version
+      placeholder: devsync --version
+    validations:
+      required: true
+  - type: input
+    id: local-os
+    attributes:
+      label: Local OS
+      placeholder: macOS 15.4 (arm64)
+    validations:
+      required: true
+  - type: input
+    id: remote-os
+    attributes:
+      label: Remote OS
+      placeholder: Ubuntu 24.04 (x86_64)
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did it happen?
+      multiple: true
+      options:
+        - CLI
+        - VS Code extension
+        - Claude Code / agent hook
+        - Other
+  - type: textarea
+    id: config
+    attributes:
+      label: .devsync.toml (redact hostnames if needed)
+      render: toml
