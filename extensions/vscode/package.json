@@ -212,6 +212,18 @@
         "title": "Show Sidebar",
         "category": "devsync",
         "icon": "$(remote-explorer)"
+      },
+      {
+        "command": "devsync.chooseFiles",
+        "title": "Choose What to Sync…",
+        "category": "devsync",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "devsync.refreshRemoteFiles",
+        "title": "Refresh Remote Files",
+        "category": "devsync",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -295,6 +307,11 @@
           "command": "devsync.pullPick",
           "when": "scmProvider == devsync",
           "group": "2_sync@0"
+        },
+        {
+          "command": "devsync.chooseFiles",
+          "when": "scmProvider == devsync",
+          "group": "2_sync@2"
         }
       ],
       "scm/resourceGroup/context": [
@@ -517,6 +534,11 @@
           "command": "devsync.walkthrough",
           "when": "view == devsync.run",
           "group": "2_setup@2"
+        },
+        {
+          "command": "devsync.refreshRemoteFiles",
+          "when": "view == devsync.remoteFiles",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
@@ -579,6 +601,11 @@
           "command": "devsync.killJob",
           "when": "view =~ /^devsync\\./ && viewItem == job-running",
           "group": "1_job@3"
+        },
+        {
+          "command": "devsync.pullPaths",
+          "when": "view == devsync.remoteFiles && viewItem == remote-node",
+          "group": "inline@1"
         }
       ],
       "explorer/context": [
@@ -610,6 +637,11 @@
       }
     ],
     "viewsWelcome": [
+      {
+        "view": "devsync.remoteFiles",
+        "contents": "Connect this folder to a remote to browse its files.\n[Connect Project to Remote](command:devsync.init)",
+        "when": "!devsync.active"
+      },
       {
         "view": "devsync.changes",
         "contents": "Not connected yet.\n[Connect Project to Remote](command:devsync.init)",
@@ -753,6 +785,11 @@
         {
           "id": "devsync.changes",
           "name": "Not on Remote Yet",
+          "icon": "media/activity.svg"
+        },
+        {
+          "id": "devsync.remoteFiles",
+          "name": "Remote Files",
           "icon": "media/activity.svg"
         },
         {

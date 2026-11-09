@@ -136,6 +136,30 @@ pub enum Cmd {
         #[arg(short, long)]
         all: bool,
     },
+    /// Browse the remote project one folder at a time: sizes, file counts and
+    /// what is synced. Nothing is hashed; huge folders show lower bounds.
+    Tree {
+        /// Remote folder, relative to the project (default: the project root).
+        path: Option<String>,
+    },
+    /// Choose what to sync: add files or folders to the selection.
+    ///
+    /// Without arguments, shows the current selection. Unselected paths are
+    /// neither scanned nor synced, and stay untouched on the remote.
+    Select {
+        paths: Vec<String>,
+        /// Download the selected paths right away.
+        #[arg(long)]
+        pull: bool,
+        /// Go back to syncing everything.
+        #[arg(long, conflicts_with = "paths")]
+        all: bool,
+    },
+    /// Stop syncing files or folders (they stay untouched on the remote).
+    Unselect {
+        #[arg(required = true)]
+        paths: Vec<String>,
+    },
     /// Configuration, connectivity and pending changes.
     Status,
     /// Local changes not yet on the remote, like `git status` (no network).

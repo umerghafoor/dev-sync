@@ -496,3 +496,115 @@ fn broken_shared_ssh_connection_falls_back_to_direct() {
     assert_eq!(ok(&o), "direct works\n");
     assert!(!String::from_utf8_lossy(&o.stderr).contains("retry #"), "no retry loop needed");
 }
+
+#[test]
+fn tree_and_selection_control_what_is_synced() {
+    let env = setup();
+    write(&env.remote.join("src/app.py"), "print(1)");
+    write(&env.remote.join("README.md"), "readme");
+    write(&env.remote.join("data/a.csv"), "1,2");
+    write(&env.remote.join("data/sub/b.csv"), "3,4");
+    write(&env.remote.join("models/m.bin"), "0123456789");
+    write(&env.remote.join(".venv/lib/x.py"), "venv");
+
+    // Browse one level with sizes; nothing is selected away yet.
+    let tree = |path: &str| -> serde_json::Value {
+        serde_json::from_str(ok(&devsync(&env.local, &["--json", "tree", path])).trim()).unwrap()
+    };
+    let root = tree("");
+    let find = |v: &serde_json::Value, p: &str| v["nodes"].as_array().unwrap().iter().find(|n| n["path"] == p).cloned();
+    let data = find(&root, "data").unwrap();
+    assert_eq!((data["dir"].as_bool(), data["files"].as_u64(), data["size"].as_u64()), (Some(true), Some(2), Some(6)));
+    assert_eq!(data["selection"], "selected");
+    assert_eq!(find(&root, ".venv").unwrap()["selection"], "excluded");
+    assert_eq!(find(&tree("data"), "data/sub").unwrap()["files"], 1);
+    let human = ok(&devsync(&env.local, &["tree"]));
+    assert!(human.contains("[x] data/") && human.contains(".venv/") && human.contains("always excluded"), "{human}");
+
+    // Unselect the big folders, then do the first sync.
+    ok(&devsync(&env.local, &["unselect", "data", "models"]));
+    assert_eq!(find(&tree(""), "data").unwrap()["selection"], "unselected");
+    ok(&devsync(&env.local, &["push"]));
+    assert!(env.local.join("src/app.py").exists() && env.local.join("README.md").exists());
+    assert!(!env.local.join("data").exists() && !env.local.join("models").exists(), "unselected folders not pulled");
+
+    // Local files in an unselected folder are not uploaded either.
+    write(&env.local.join("data/local-only.csv"), "x");
+    ok(&devsync(&env.local, &["push"]));
+    assert!(!env.remote.join("data/local-only.csv").exists());
+    assert!(ok(&devsync(&env.local, &["changes"])).contains("nothing to push"));
+
+    // Selecting a folder later can pull it right away.
+    ok(&devsync(&env.local, &["select", "data", "--pull"]));
+    assert_eq!(fs::read_to_string(env.local.join("data/sub/b.csv")).unwrap(), "3,4");
+    let listing = ok(&devsync(&env.local, &["select"]));
+    assert!(listing.contains("/models") && !listing.contains("/data"), "{listing}");
+    ok(&devsync(&env.local, &["select", "--all"]));
+    assert!(ok(&devsync(&env.local, &["select"])).contains("whole project"));
+}
+
+#[test]
+fn truncated_agent_on_remote_is_replaced() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let home = base.join("remote-home");
+    let local = base.join("local");
+    fs::create_dir_all(&home).unwrap();
+    fs::create_dir_all(&local).unwrap();
+    let ssh = fake_ssh(&base, &home);
+    let run = |args: &[&str]| -> Output {
+        Command::new(bin())
+            .args(args)
+            .current_dir(&local)
+            .env("NO_COLOR", "1")
+            .env("DEVSYNC_SSH", &ssh)
+            .output()
+            .unwrap()
+    };
+    ok(&run(&["init", "me@box:~/proj"]));
+    let cfg = local.join(".devsync.toml");
+    fs::write(&cfg, fs::read_to_string(&cfg).unwrap().replace("multiplex = true", "multiplex = false")).unwrap();
+    ok(&run(&["exec", "--", "true"]));
+    let agent = fs::read_dir(home.join(".devsync/bin")).unwrap().flatten().next().unwrap().path();
+    let full = fs::metadata(&agent).unwrap().len();
+
+    // Simulate an upload that was cut off and still ended up in place.
+    let bytes = fs::read(&agent).unwrap();
+    fs::write(&agent, &bytes[..bytes.len() / 5]).unwrap();
+    fs::remove_file(local.join(".devsync/remote.json")).unwrap();
+
+    assert_eq!(ok(&run(&["exec", "--", "echo healed"])), "healed\n");
+    assert_eq!(fs::metadata(&agent).unwrap().len(), full, "complete agent re-uploaded");
+    // No temp files left behind.
+    let leftovers: Vec<_> = fs::read_dir(home.join(".devsync/bin"))
+        .unwrap()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with('.'))
+        .collect();
+    assert!(leftovers.is_empty());
+}
+
+#[test]
+fn large_remote_asks_what_to_sync_before_first_sync() {
+    let env = setup();
+    set_config(&env, "large_remote_limit_mb = 1024", "large_remote_limit_mb = 1");
+    write(&env.remote.join("src/app.py"), "print(1)");
+    write(&env.remote.join("data/huge.bin"), &"x".repeat(2 * 1024 * 1024));
+
+    // Nothing chosen yet: neither push nor a whole pull scans or downloads.
+    for args in [&["push"][..], &["pull"][..]] {
+        let o = devsync(&env.local, args);
+        assert!(!o.status.success(), "{args:?} must stop");
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert!(err.contains("remote project is large") && err.contains("data/"), "{err}");
+        assert!(!env.local.join("src").exists() && !env.local.join("data").exists());
+    }
+    // Pulling named paths is always allowed.
+    ok(&devsync(&env.local, &["pull", "src"]));
+
+    // Once a selection exists, the first sync proceeds without the big folder.
+    ok(&devsync(&env.local, &["unselect", "data"]));
+    ok(&devsync(&env.local, &["push"]));
+    assert!(env.local.join("src/app.py").exists());
+    assert!(!env.local.join("data").exists());
+}

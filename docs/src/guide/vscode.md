@@ -50,6 +50,7 @@ a bigger **Run** box:
 | **Run** | Status dot and remote address, a command field, a full-width **▶ Run on Remote** button, **Run in Background** and **Terminal**, and your **Recent** commands (click to edit, ▶ to run again). Enter runs; ⌘Enter runs in the background; Shift+Enter adds a line |
 | **Not on Remote Yet** | Same A/M/D list as in Source Control, with Pull, Pull Files…, Push and Pause/Resume buttons |
 | **Conflicts** | Appears only when there are conflicts |
+| **Remote Files** | The remote project, one folder at a time, with sizes. Check a folder to sync and download it; uncheck to stop syncing it (it stays on the remote). Nothing is hashed while browsing |
 | **Remote Jobs** | ✓ / ✗ / spinner for each job; click for output; ■ stop, ↻ run again |
 
 The icon shows a **count badge**: changes not yet on the remote, plus

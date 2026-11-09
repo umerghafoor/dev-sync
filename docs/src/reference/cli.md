@@ -20,6 +20,9 @@ current directory and its parents.
 | [`collect`](#devsync-collect) | Fetch output of running jobs into .devsync/jobs/ once, then exit |
 | [`pull`](#devsync-pull) | Get code from the remote: the whole project, or specific files/folders |
 | [`ls`](#devsync-ls) | List files on the remote and how they compare with yours |
+| [`tree`](#devsync-tree) | Browse the remote project one folder at a time: sizes, file counts and what is synced. Nothing is hashed; huge folders show lower bounds |
+| [`select`](#devsync-select) | Choose what to sync: add files or folders to the selection |
+| [`unselect`](#devsync-unselect) | Stop syncing files or folders (they stay untouched on the remote) |
 | [`status`](#devsync-status) | Configuration, connectivity and pending changes |
 | [`changes`](#devsync-changes) | Local changes not yet on the remote, like `git status` (no network) |
 | [`doctor`](#devsync-doctor) | Check the whole setup end to end and explain problems |
@@ -47,6 +50,9 @@ Commands:
   collect      Fetch output of running jobs into .devsync/jobs/ once, then exit
   pull         Get code from the remote: the whole project, or specific files/folders
   ls           List files on the remote and how they compare with yours
+  tree         Browse the remote project one folder at a time: sizes, file counts and what is synced. Nothing is hashed; huge folders show lower bounds
+  select       Choose what to sync: add files or folders to the selection
+  unselect     Stop syncing files or folders (they stay untouched on the remote)
   status       Configuration, connectivity and pending changes
   changes      Local changes not yet on the remote, like `git status` (no network)
   doctor       Check the whole setup end to end and explain problems
@@ -300,6 +306,78 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+```
+
+## devsync tree
+
+```text
+Browse the remote project one folder at a time: sizes, file counts and what is synced. Nothing is hashed; huge folders show lower bounds
+
+Usage: devsync tree [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]  Remote folder, relative to the project (default: the project root)
+
+Options:
+  -C, --dir <DIR>  Run as if started in this directory
+      --json       Machine-readable output (NDJSON events / JSON results)
+  -v, --verbose    Show every file transferred and connection details
+  -q, --quiet      Only errors and warnings
+  -h, --help       Print help
+```
+
+## devsync select
+
+```text
+Choose what to sync: add files or folders to the selection.
+
+Without arguments, shows the current selection. Unselected paths are neither scanned nor synced, and stay untouched on the remote.
+
+Usage: devsync select [OPTIONS] [PATHS]...
+
+Arguments:
+  [PATHS]...
+
+
+Options:
+  -C, --dir <DIR>
+          Run as if started in this directory
+
+      --pull
+          Download the selected paths right away
+
+      --all
+          Go back to syncing everything
+
+      --json
+          Machine-readable output (NDJSON events / JSON results)
+
+  -v, --verbose
+          Show every file transferred and connection details
+
+  -q, --quiet
+          Only errors and warnings
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+
+## devsync unselect
+
+```text
+Stop syncing files or folders (they stay untouched on the remote)
+
+Usage: devsync unselect [OPTIONS] <PATHS>...
+
+Arguments:
+  <PATHS>...
+
+Options:
+  -C, --dir <DIR>  Run as if started in this directory
+      --json       Machine-readable output (NDJSON events / JSON results)
+  -v, --verbose    Show every file transferred and connection details
+  -q, --quiet      Only errors and warnings
+  -h, --help       Print help
 ```
 
 ## devsync status

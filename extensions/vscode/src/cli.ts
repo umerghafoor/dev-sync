@@ -162,6 +162,7 @@ export type DevsyncEvent =
   | { event: "watching"; root: string }
   | { event: "changed"; paths: number }
   | { event: "offline"; error: string }
+  | { event: "needs_selection"; message: string }
   | { event: "warning"; message: string }
   | { event: "info"; message: string }
   | { event: "error"; message: string };

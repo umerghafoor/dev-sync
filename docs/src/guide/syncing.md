@@ -47,6 +47,43 @@ This shows what the first sync would download. To bring remote changes
 down at any later time, run `devsync pull` (see
 [Pulling code from the remote](ports-and-shells.md#pulling-code-from-the-remote)).
 
+## Choosing what to sync (large projects)
+
+Remote projects often hold far more than code: datasets, model weights,
+outputs. You choose which parts devsync handles. Unchosen paths are never
+scanned or transferred, and stay untouched on the remote.
+
+```bash
+devsync tree
+devsync tree src
+devsync unselect data models
+devsync select models/small --pull
+devsync select
+devsync select --all
+```
+
+- `devsync tree` lists one remote folder level at a time with sizes and file
+  counts, and marks each entry `[x]` synced, `[~]` partly, `[ ]` not synced,
+  or *always excluded*. Nothing is hashed; counting a huge folder stops after
+  a few seconds and shows a lower bound (`≥ 141 MB`).
+- `devsync unselect <path…>` stops syncing paths (stored as `/path` in
+  `sync.ignore`).
+- `devsync select <path…>` syncs them again; `--pull` downloads them right
+  away. When `sync.include` lists paths, only those are synced.
+- `devsync select` shows the current selection, and `--all` goes back to
+  everything.
+
+In VS Code, use the **Remote Files** view in the devsync sidebar: check or
+uncheck folders, and checking one downloads it.
+
+**Large-remote guard.** The first time a machine syncs, or when you
+`devsync pull` everything, with nothing chosen yet, devsync first takes a
+quick look at the remote. If it holds more than `sync.large_remote_limit_mb`
+(default 1 GB), devsync stops, lists the biggest folders and asks you to
+choose, instead of hashing and downloading everything. Auto sync shows this
+once and waits until the selection changes; edits to `.devsync.toml` take
+effect without restarting it.
+
 ## What is synced
 
 Everything in the project directory except:

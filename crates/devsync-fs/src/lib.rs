@@ -11,7 +11,7 @@ pub mod write;
 pub use cache::HashCache;
 pub use diff::{plan, Plan};
 pub use paths::{safe_join, validate_rel, PathError};
-pub use scan::{hash_file, scan, scan_one, DEFAULT_EXCLUDES};
+pub use scan::{builtin_excluded, hash_file, included, norm_rel, scan, scan_one, DEFAULT_EXCLUDES};
 
 /// Directory (relative to the project root) holding client-side state.
 pub const CLIENT_STATE_DIR: &str = ".devsync";

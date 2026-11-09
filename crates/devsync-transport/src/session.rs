@@ -331,15 +331,23 @@ pub fn connect(target: &Target, opts: &ConnectOptions) -> Result<Session, Transp
                 Err(Handshake::Failed(e)) => Err(e),
             }
         }
-        Endpoint::Ssh(ssh) => match connect_ssh(ssh, target, opts) {
-            // A broken shared connection fails every session through it;
-            // retry right away with a direct connection.
-            Err(e) if e.is_transient() && ssh.mux_active() => {
-                ssh.drop_shared_connection();
-                connect_ssh(ssh, target, opts)
+        Endpoint::Ssh(ssh) => {
+            let failed = |r: &Result<Session, TransportError>| matches!(r, Err(e) if e.is_transient());
+            let mut r = connect_ssh(ssh, target, opts);
+            if failed(&r) && ssh.mux_active() {
+                // A broken shared connection fails every session through it:
+                // replace it with a fresh one first (cheap on slow links)…
+                ssh.close_shared_connection();
+                r = connect_ssh(ssh, target, opts);
+                if failed(&r) && ssh.mux_active() {
+                    // …and if that fails too, connect directly for a while.
+                    ssh.close_shared_connection();
+                    ssh.avoid_shared_connection();
+                    r = connect_ssh(ssh, target, opts);
+                }
             }
-            other => other,
-        },
+            r
+        }
     }
 }
 

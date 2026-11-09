@@ -2,12 +2,15 @@
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// Set once a shared (multiplexed) connection misbehaved in this process;
-/// later sessions then connect directly.
-static MUX_DISABLED: AtomicBool = AtomicBool::new(false);
+/// While set (and in the future), sessions connect directly instead of
+/// through the shared connection, which failed even after being restarted.
+static MUX_DISABLED_UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// How long to avoid the shared connection after it failed twice.
+const MUX_COOLDOWN: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SshConfig {
@@ -35,10 +38,15 @@ impl SshConfig {
             identity: None,
             options: Vec::new(),
             multiplex: true,
-            control_persist_secs: 60,
+            control_persist_secs: 600,
             connect_timeout_secs: 10,
             ssh_bin: std::env::var("DEVSYNC_SSH").unwrap_or_else(|_| "ssh".into()),
         }
+    }
+
+    /// Private per-user directory for devsync's ssh sockets and locks.
+    pub(crate) fn lock_dir(&self) -> PathBuf {
+        Self::control_dir()
     }
 
     fn control_dir() -> PathBuf {
@@ -50,18 +58,18 @@ impl SshConfig {
 
     /// Whether sessions currently go through a shared connection.
     pub fn mux_active(&self) -> bool {
-        self.multiplex && !MUX_DISABLED.load(Ordering::SeqCst)
+        self.multiplex && MUX_DISABLED_UNTIL.lock().map(|g| g.is_none_or(|t| Instant::now() >= t)).unwrap_or(true)
     }
 
-    /// A shared connection can break silently (network change, dead TCP,
-    /// server session limit): every session through it then fails with exit
-    /// 255 and no message. Shut it down and connect directly from now on.
-    pub fn drop_shared_connection(&self) {
-        if !self.mux_active() {
+    /// Shuts down the shared connection (if any) so the next session starts
+    /// a fresh one. A shared connection can break silently (network change,
+    /// dead TCP, server session limit): every session through it then fails
+    /// with exit 255 and no message.
+    pub fn close_shared_connection(&self) {
+        if !self.multiplex {
             return;
         }
-        MUX_DISABLED.store(true, Ordering::SeqCst);
-        tracing::info!("shared ssh connection failed; closing it and connecting directly");
+        tracing::info!("shared ssh connection failed; closing it");
         let mut c = Command::new(&self.ssh_bin);
         c.arg("-o").arg(format!("ControlPath={}/%C", Self::control_dir().display()));
         if let Some(p) = self.port {
@@ -82,6 +90,14 @@ impl SshConfig {
             }
             let _ = child.kill();
             let _ = child.wait();
+        }
+    }
+
+    /// Connect directly (no shared connection) for a few minutes.
+    pub fn avoid_shared_connection(&self) {
+        tracing::info!("shared ssh connection keeps failing; connecting directly for a while");
+        if let Ok(mut g) = MUX_DISABLED_UNTIL.lock() {
+            *g = Some(Instant::now() + MUX_COOLDOWN);
         }
     }
 

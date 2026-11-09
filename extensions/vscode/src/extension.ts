@@ -9,16 +9,21 @@ import { binaryPath, DevsyncEvent, DevsyncNotFound, EventStream, run, runJson, S
 import { asResource, Model } from "./model";
 import { DevsyncScm } from "./scm";
 import { Sidebar } from "./views";
+import { RemoteFiles } from "./remoteFiles";
 
 const CONFIG_FILE = ".devsync.toml";
 
-type SyncState = "idle" | "pending" | "syncing" | "synced" | "offline" | "error" | "stopped";
+type SyncState = "idle" | "pending" | "syncing" | "synced" | "offline" | "error" | "stopped" | "choose";
 
 class Controller implements vscode.Disposable {
   private root?: string;
   private model?: Model;
   private scm?: DevsyncScm;
   private sidebar?: Sidebar;
+  private remoteFiles?: RemoteFiles;
+  private binaryStamp = "";
+  private updateTimer?: NodeJS.Timeout;
+  private askedToChoose = false;
   private readonly status: vscode.StatusBarItem;
   private watch?: EventStream;
   private readonly disposables: vscode.Disposable[] = [];
@@ -42,7 +47,8 @@ class Controller implements vscode.Disposable {
         background ? this.runInBackground(command, this.activeDir()) : this.runInTerminal(command, this.activeDir()),
       exec: (id) => void vscode.commands.executeCommand(id),
     });
-    this.disposables.push(this.sidebar);
+    this.remoteFiles = new RemoteFiles(this.log, () => this.model?.scheduleRefresh(0));
+    this.disposables.push(this.sidebar, this.remoteFiles);
     this.registerCommands();
     this.pushRunState();
     const root = await this.findRoot();
@@ -70,6 +76,17 @@ class Controller implements vscode.Disposable {
       this.disposables.push(this.scm);
     }
     this.sidebar?.setModel(this.model);
+    this.remoteFiles?.setRoot(root);
+    // When the devsync program is updated, restart auto sync so no old
+    // version keeps running in the background.
+    this.updateTimer = setInterval(() => {
+      const stamp = this.binaryVersionStamp();
+      if (this.watch?.running && this.binaryStamp && stamp && stamp !== this.binaryStamp) {
+        this.log.appendLine("devsync was updated; restarting auto sync");
+        this.stopWatch();
+        this.startWatch();
+      }
+    }, 15_000);
     this.disposables.push(this.model.onDidChange(() => this.setState(this.state, this.detail)));
     this.status.show();
     this.setState("stopped");
@@ -109,6 +126,7 @@ class Controller implements vscode.Disposable {
       offline: ["$(cloud-offline)", "devsync: offline"],
       error: ["$(error)", "devsync: error"],
       stopped: ["$(debug-pause)", "devsync: paused"],
+      choose: ["$(list-tree)", "devsync: choose what to sync"],
     };
     const [icon, label] = view[state];
     const running = this.model?.runningJobs ?? 0;
@@ -151,6 +169,7 @@ class Controller implements vscode.Disposable {
       offline: "offline — changes queued",
       error: "error",
       stopped: "auto sync paused",
+      choose: "large remote — choose what to sync",
     };
     this.sidebar?.updateRun({
       active: !!this.root,
@@ -199,6 +218,19 @@ class Controller implements vscode.Disposable {
       case "offline":
         this.setState("offline", e.error);
         this.model?.scheduleRefresh();
+        break;
+      case "needs_selection":
+        this.setState("choose", e.message);
+        this.log.appendLine(e.message);
+        if (!this.askedToChoose) {
+          this.askedToChoose = true;
+          void vscode.window
+            .showWarningMessage(
+              "The remote project is large. Choose which folders to sync before the first sync.",
+              "Choose What to Sync",
+            )
+            .then((pick) => pick && this.remoteFiles?.reveal());
+        }
         break;
       case "pulled":
         this.log.appendLine(`pulled back ${e.path}`);
@@ -253,9 +285,21 @@ class Controller implements vscode.Disposable {
 
   // --------------------------------------------------------------- watch
 
+  /** Identifies the installed devsync binary (changes when it is updated). */
+  private binaryVersionStamp(): string {
+    try {
+      const st = fs.statSync(binaryPath());
+      return `${st.size}:${st.mtimeMs}`;
+    } catch {
+      return "";
+    }
+  }
+
   private startWatch(): void {
     const root = this.requireRoot();
     if (this.watch?.running) return;
+    this.binaryStamp = this.binaryVersionStamp();
+    this.askedToChoose = false;
     this.watch?.dispose();
     this.watch = new EventStream(
       root,
@@ -400,6 +444,7 @@ class Controller implements vscode.Disposable {
         { label: "Sync", kind: vscode.QuickPickItemKind.Separator },
         { label: "$(repo-pull) Pull everything from remote", cmd: "devsync.pull" },
         { label: "$(cloud-download) Pull files from remote…", cmd: "devsync.pullPick" },
+        { label: "$(list-tree) Choose what to sync…", cmd: "devsync.chooseFiles" },
         { label: "$(cloud-upload) Push now", cmd: "devsync.push" },
         this.watch?.running
           ? { label: "$(debug-pause) Pause auto sync", cmd: "devsync.stopWatch" }
@@ -481,9 +526,16 @@ class Controller implements vscode.Disposable {
     reg("devsync.pull", () => this.pullPaths([]));
 
     // Explorer / editor-tab context menu: one item or a multi-selection.
-    reg("devsync.pullPaths", async (uri?: vscode.Uri, uris?: vscode.Uri[]) => {
+    reg("devsync.pullPaths", async (uri?: vscode.Uri | { node?: { path: string } }, uris?: vscode.Uri[]) => {
       const root = this.requireRoot();
-      const picked = (uris && uris.length ? uris : uri ? [uri] : []).filter((u) => u.scheme === "file");
+      // From the Remote Files view: the item carries its remote path.
+      if (uri && "node" in uri && uri.node) {
+        await this.pullPaths([uri.node.path]);
+        return;
+      }
+      const picked = (uris && uris.length ? uris : uri instanceof vscode.Uri ? [uri] : []).filter(
+        (u) => u.scheme === "file",
+      );
       if (!picked.length) {
         await vscode.commands.executeCommand("devsync.pullPick");
         return;
@@ -573,6 +625,12 @@ class Controller implements vscode.Disposable {
       qp.show();
       await load();
     });
+
+    reg("devsync.chooseFiles", async () => {
+      this.requireRoot();
+      await this.remoteFiles?.reveal();
+    });
+    reg("devsync.refreshRemoteFiles", () => this.remoteFiles?.refresh());
 
     reg("devsync.startWatch", () => this.startWatch());
     reg("devsync.stopWatch", () => this.stopWatch());
@@ -710,6 +768,7 @@ class Controller implements vscode.Disposable {
   }
 
   dispose(): void {
+    if (this.updateTimer) clearInterval(this.updateTimer);
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.watch?.dispose();
     for (const d of this.disposables) d.dispose();

@@ -39,7 +39,11 @@ impl Project {
     }
 
     pub fn ignore_spec(&self) -> IgnoreSpec {
-        IgnoreSpec { use_gitignore: self.config.sync.use_gitignore, patterns: self.config.sync.ignore.clone() }
+        IgnoreSpec {
+            use_gitignore: self.config.sync.use_gitignore,
+            patterns: self.config.sync.ignore.clone(),
+            include: self.config.sync.include.clone(),
+        }
     }
 
     pub fn target(&self) -> Target {

@@ -108,3 +108,68 @@ pub fn gc(state: &Path) {
         }
     }
 }
+
+/// Sizes a directory tree by `stat` only, stopping at `deadline`.
+/// Returns (bytes, files, complete).
+fn du(dir: &Path, deadline: std::time::Instant) -> (u64, u64, bool) {
+    let (mut size, mut files) = (0u64, 0u64);
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            if std::time::Instant::now() >= deadline {
+                return (size, files, false);
+            }
+            let Ok(md) = e.metadata() else { continue };
+            if md.is_dir() {
+                stack.push(e.path());
+            } else if md.is_file() {
+                size += md.len();
+                files += 1;
+            }
+        }
+    }
+    (size, files, true)
+}
+
+/// Direct children of `rel` with sizes, without reading or hashing files.
+/// Sizing shares a time budget, so huge directories are reported as lower
+/// bounds (`complete: false`) instead of being walked in full.
+pub fn tree(root: &Path, rel: &str, budget_ms: u32) -> Result<Response, String> {
+    use devsync_proto::TreeNode;
+    let rel = devsync_fs::norm_rel(rel);
+    let dir = if rel.is_empty() { root.to_path_buf() } else { safe_join(root, &rel).map_err(|e| e.to_string())? };
+    let mut entries: Vec<fs::DirEntry> = fs::read_dir(&dir)
+        .map_err(|e| format!("{}: {e}", if rel.is_empty() { "." } else { &rel }))?
+        .flatten()
+        .collect();
+    entries.sort_by_key(|e| (!e.metadata().map(|m| m.is_dir()).unwrap_or(false), e.file_name()));
+    let budget = std::time::Duration::from_millis(budget_ms.clamp(100, 10_000) as u64);
+    let end = std::time::Instant::now() + budget;
+    let mut nodes = Vec::new();
+    let total = entries.len().max(1) as u32;
+    for (i, e) in entries.iter().enumerate() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if rel.is_empty() && (name == devsync_fs::AGENT_STATE_DIR || name == devsync_fs::CLIENT_STATE_DIR) {
+            continue;
+        }
+        let Ok(md) = e.metadata() else { continue };
+        let path = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
+        let excluded = devsync_fs::builtin_excluded(&name);
+        let (size, files, complete) = if md.is_dir() {
+            if excluded {
+                (0, 0, false)
+            } else {
+                // Each remaining directory gets a fair share of what is left.
+                let now = std::time::Instant::now();
+                let left = end.saturating_duration_since(now);
+                let share = left / (total - i as u32).max(1);
+                du(&e.path(), now + share)
+            }
+        } else {
+            (md.len(), 1, true)
+        };
+        nodes.push(TreeNode { path, dir: md.is_dir(), size, files, complete, excluded });
+    }
+    Ok(Response::Tree(nodes))
+}

@@ -95,6 +95,7 @@ impl Agent {
             Request::JobKill { id } => jobs::kill(&self.state, &id),
             Request::JobList => Ok(Response::Jobs(jobs::list(&self.state))),
             Request::JobChanges { id, ignore } => jobs::changes(&self.root, &self.state, &id, &ignore),
+            Request::Tree { path, budget_ms } => files::tree(&self.root, &path, budget_ms),
         }
     }
 }

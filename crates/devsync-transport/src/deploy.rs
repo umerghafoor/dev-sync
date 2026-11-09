@@ -162,8 +162,94 @@ pub fn probe(ssh: &SshConfig) -> Result<(String, String), TransportError> {
     }
 }
 
-/// Makes sure a compatible agent exists remotely and returns its file name.
+/// Serialises deployments to one host among local devsync processes (auto
+/// sync, editor, terminal): the second one waits and then reuses the upload
+/// instead of competing for a slow link.
+struct DeployLock {
+    // Held only for its lock; released when dropped.
+    _file: Option<std::fs::File>,
+}
+
+impl DeployLock {
+    fn acquire(ssh: &SshConfig) -> Self {
+        use std::os::unix::io::AsRawFd;
+        let dir = ssh.lock_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        let host: String = ssh.host.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(dir.join(format!("deploy-{host}.lock")))
+        {
+            Ok(f) => {
+                // SAFETY: flock on a valid descriptor we own; released on close.
+                unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX) };
+                Self { _file: Some(f) }
+            }
+            Err(_) => Self { _file: None },
+        }
+    }
+}
+
+/// gzip-compressed copy of the agent (about half the size), cached in the
+/// temp directory. `None` if gzip is unavailable locally.
+fn compressed(bin: &Path, name: &str) -> Option<PathBuf> {
+    let out = std::env::temp_dir().join(format!("{name}.gz"));
+    if out.is_file() {
+        return Some(out);
+    }
+    let tmp = out.with_extension(format!("gz.{}", std::process::id()));
+    let ok = Command::new("gzip")
+        .arg("-9")
+        .arg("-c")
+        .arg(bin)
+        .stdout(std::fs::File::create(&tmp).ok()?)
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if ok && std::fs::rename(&tmp, &out).is_ok() {
+        Some(out)
+    } else {
+        let _ = std::fs::remove_file(&tmp);
+        None
+    }
+}
+
+/// Size of the remote agent file, if it exists.
+fn remote_size(ssh: &SshConfig, dest: &str) -> Result<Option<u64>, TransportError> {
+    let o = run(ssh, &format!("echo {MARK}; wc -c < {dest} 2>/dev/null"), None, Duration::from_secs(60))?;
+    Ok(marked(&o.stdout).and_then(|s| s.split_whitespace().next()).and_then(|s| s.parse().ok()))
+}
+
+/// Uploads `src` (gzip-compressed if `gz`) to `dest`, verifying the size
+/// *before* moving it into place, so an interrupted transfer can never be
+/// mistaken for a complete agent.
+fn upload(ssh: &SshConfig, src: &Path, gz: bool, dest: &str, name: &str, size: u64) -> Result<(), TransportError> {
+    let decode = if gz { "if command -v gzip >/dev/null 2>&1; then gzip -dc; else exit 4; fi" } else { "cat" };
+    let cmd = format!(
+        "d=~/{REMOTE_BIN_DIR}; mkdir -p \"$d\" && t=\"$d/.{name}.$$\" && \
+         {{ {decode}; }} > \"$t\" && [ \"$(wc -c < \"$t\" | tr -d ' ')\" = {size} ] && chmod 755 \"$t\" && mv -f \"$t\" {dest} \
+         || {{ s=$?; rm -f \"$t\"; [ $s = 4 ] && exit 4; exit 3; }}; \
+         find \"$d\" -name 'devsync-*' ! -name {name} -mtime +7 -delete 2>/dev/null; exit 0"
+    );
+    let up = run(ssh, &cmd, Some(src), Duration::from_secs(900))?;
+    match up.code {
+        Some(0) => Ok(()),
+        Some(4) => Err(TransportError::Deploy("remote has no gzip".into())),
+        // Interrupted or truncated (dropped connection, or a shell startup
+        // file reading stdin): retryable.
+        _ => Err(TransportError::Disconnected(format!(
+            "agent upload incomplete{}",
+            if up.stderr.trim().is_empty() { String::new() } else { format!(": {}", up.stderr.trim()) }
+        ))),
+    }
+}
+
+/// Makes sure a compatible, complete agent exists remotely and returns its file name.
 pub fn ensure_agent(ssh: &SshConfig) -> Result<String, TransportError> {
+    let _lock = DeployLock::acquire(ssh);
     let (os, arch) = probe(ssh)?;
     let bin = find_agent_binary(&os, &arch).ok_or_else(|| {
         TransportError::Deploy(format!(
@@ -174,28 +260,19 @@ pub fn ensure_agent(ssh: &SshConfig) -> Result<String, TransportError> {
         ))
     })?;
     let name = agent_name_for(&bin).map_err(|e| TransportError::Deploy(e.to_string()))?;
+    let size = std::fs::metadata(&bin).map(|m| m.len()).map_err(|e| TransportError::Deploy(e.to_string()))?;
     let dest = format!("~/{REMOTE_BIN_DIR}/{name}");
-    let check = run(ssh, &format!("test -x {dest}"), None, Duration::from_secs(30))?;
-    if check.code == Some(0) {
+    // Reuse only a complete copy; a truncated one is replaced.
+    if remote_size(ssh, &dest)? == Some(size) {
         return Ok(name);
     }
     tracing::info!("uploading agent {} ({}) to remote {os}/{arch}", name, bin.display());
-    let tmp = format!("{dest}.tmp$$");
-    let cmd = format!("mkdir -p ~/{REMOTE_BIN_DIR} && cat > {tmp} && chmod 755 {tmp} && mv -f {tmp} {dest}");
-    let up = run(ssh, &cmd, Some(&bin), Duration::from_secs(600))?;
-    if up.code != Some(0) {
-        return Err(TransportError::Deploy(format!("upload failed: {}", up.stderr.trim())));
-    }
-    // A shell startup file that reads stdin would have eaten part of the upload.
-    let want = std::fs::metadata(&bin).map(|m| m.len()).unwrap_or(0);
-    let check = run(ssh, &format!("echo {MARK}; wc -c < {dest}"), None, Duration::from_secs(30))?;
-    let got: u64 = marked(&check.stdout).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
-    if got != want {
-        let _ = run(ssh, &format!("rm -f {dest}"), None, Duration::from_secs(30));
-        return Err(TransportError::Deploy(format!(
-            "the uploaded agent is {got} bytes instead of {want}. Something in your remote shell startup \
-             files (~/.bashrc, ~/.profile) reads input in non-interactive shells; make it skip those"
-        )));
+    match compressed(&bin, &name) {
+        Some(gz) => match upload(ssh, &gz, true, &dest, &name, size) {
+            Err(TransportError::Deploy(m)) if m.contains("no gzip") => upload(ssh, &bin, false, &dest, &name, size)?,
+            other => other?,
+        },
+        None => upload(ssh, &bin, false, &dest, &name, size)?,
     }
     Ok(name)
 }

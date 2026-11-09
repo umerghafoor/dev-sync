@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`--changed`, `--all`, `--json`).
 - VS Code: **Pull from Remote** in the Explorer and editor-tab context menus,
   and **Pull Files…**, a searchable picker of remote files and folders.
+- Choosing what to sync: `devsync tree` browses the remote one level at a
+  time with time-limited sizes (no hashing); `devsync select` / `unselect`
+  edit `sync.include` / `sync.ignore` (comments preserved); unselected paths
+  are not even scanned. VS Code: **Remote Files** view with checkboxes.
+- Large-remote guard: the first sync or a whole pull of a remote larger than
+  `sync.large_remote_limit_mb` (1 GB) with nothing chosen stops and asks what
+  to sync; auto sync waits for a selection instead of retrying.
+- `devsync watch` reloads `.devsync.toml` when it changes.
+- VS Code restarts auto sync when the devsync binary is updated.
 - `devsync changes`: git-status-like list of local changes not yet on the
   remote (`--json` supported).
 - Project logo.
@@ -54,6 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Truncated agent uploads (connection dropped mid-transfer) were installed as
+  if complete, causing endless reconnect loops; uploads are now verified
+  before installation, existing agents are checked by size, uploads are
+  gzip-compressed and serialised across local devsync processes, and old
+  agents are cleaned up after a week.
+- A broken shared ssh connection is replaced with a fresh one before falling
+  back to direct connections (temporarily), and `ssh.control_persist_secs`
+  now defaults to 600 s for high-latency links.
 - A broken shared (multiplexed) ssh connection no longer causes an endless
   "exit code 255" retry loop: devsync closes it and connects directly.
 - Large remote projects: scans may take up to an hour instead of timing out

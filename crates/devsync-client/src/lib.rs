@@ -7,6 +7,7 @@ pub mod integrations;
 pub mod jobs;
 pub mod project;
 pub mod route;
+pub mod selection;
 pub mod sync;
 
 pub use config::Config;
@@ -28,6 +29,10 @@ pub enum ClientError {
     /// Refused for safety; needs explicit confirmation (e.g. `--force`).
     #[error("{0}")]
     Refused(String),
+    /// The remote project is too large to sync whole; the user must choose
+    /// what to sync first (`devsync tree`, `devsync unselect`, …).
+    #[error("{0}")]
+    NeedsSelection(String),
     #[error("interrupted")]
     Interrupted,
     #[error("{0}")]

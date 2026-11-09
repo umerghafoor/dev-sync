@@ -110,6 +110,7 @@ class RunView implements vscode.WebviewViewProvider {
   .dot.error { background: var(--vscode-errorForeground, #f14c4c); }
   .dot.syncing, .dot.pending { background: var(--vscode-charts-blue, #3794ff); }
   .dot.stopped { background: var(--vscode-disabledForeground, #888); }
+  .dot.choose { background: var(--vscode-problemsWarningIcon-foreground, #d29922); }
   .status .host { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
   textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 30px; padding: 6px 8px;
     font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size);
@@ -155,6 +156,9 @@ class RunView implements vscode.WebviewViewProvider {
       <button class="secondary" data-exec="devsync.pull" title="Get all of the remote's changes; files you edited are never overwritten">⬇ Pull All</button>
       <button class="secondary" data-exec="devsync.pullPick" title="Choose remote files or folders to pull">Pull Files…</button>
       <button class="secondary" data-exec="devsync.push" title="Send local changes now">⬆ Push</button>
+    </div>
+    <div class="row">
+      <button class="secondary" data-exec="devsync.chooseFiles" title="Browse the remote project and choose which folders to sync">Choose What to Sync…</button>
     </div>
     <div class="hint">Runs in the remote folder of the file you have open. Enter: run · ${mod}Enter: background · Shift+Enter: new line</div>
     <div id="recent-wrap"><h3>Recent</h3><ul id="recent"></ul></div>

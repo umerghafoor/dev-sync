@@ -68,6 +68,22 @@ and sends nothing until its agent is running, so they can't swallow its data. Re
 devsync sessions started at the same moment, and one didn't share the
 connection.
 
+## "the remote project is large; choose what to sync"
+
+The first sync, or a whole-project `devsync pull`, stopped before scanning
+a big remote. Run `devsync tree` to see where the size is, then
+`devsync unselect data` (or check/uncheck in VS Code's **Remote Files**).
+Auto sync continues once `.devsync.toml` changes. To sync everything anyway,
+set `sync.large_remote_limit_mb = 0`.
+
+## Every operation is slow (10–20 s) on a VPN or Tailscale link
+
+Opening an ssh connection is slow there; devsync reuses one shared
+connection. Check `ssh.multiplex = true`, and raise
+`ssh.control_persist_secs` (default 600; older configs may say 60). Check the
+raw cost with `ssh -v you@host true`: the time before
+"Connection established" is network setup.
+
 ## A command works over `ssh` but not with devsync
 
 devsync runs commands in a **non-interactive login shell**, which loads

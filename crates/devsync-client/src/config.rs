@@ -46,6 +46,11 @@ pub struct SyncConfig {
     pub use_gitignore: bool,
     /// Extra exclude patterns (gitignore syntax).
     pub ignore: Vec<String>,
+    /// Sparse sync: if non-empty, only these paths are synced and scanned.
+    pub include: Vec<String>,
+    /// Before the first full sync or pull, stop and ask what to sync when
+    /// the remote project is larger than this (0 = never ask).
+    pub large_remote_limit_mb: u64,
     /// On this machine's first sync, download files that exist only on the
     /// remote before sending local changes.
     pub initial_pull: bool,
@@ -82,7 +87,7 @@ impl Default for SshSection {
             identity: None,
             options: Vec::new(),
             multiplex: true,
-            control_persist_secs: 60,
+            control_persist_secs: 600,
             connect_timeout_secs: 10,
             response_timeout_secs: 120,
         }
@@ -94,6 +99,8 @@ impl Default for SyncConfig {
         Self {
             use_gitignore: false,
             ignore: Vec::new(),
+            include: Vec::new(),
+            large_remote_limit_mb: 1024,
             initial_pull: true,
             delete: false,
             max_delete: 200,
@@ -151,14 +158,16 @@ path = {path:?}          # project directory on the remote ("~" = remote home)
 # identity = "~/.ssh/id_ed25519"
 # options = ["ProxyJump=bastion"]
 multiplex = true             # reuse one TCP connection for devsync's short sessions
-control_persist_secs = 60    # idle time before that connection is closed
+control_persist_secs = 600   # idle time before that connection is closed
 connect_timeout_secs = 10
 response_timeout_secs = 120
 
 [sync]
 use_gitignore = false        # false: .gitignore'd files (.env, data, configs) are synced too
+include = []                 # sync only these paths, e.g. ["src/", "tests/"]; [] = everything
 ignore = []                  # extra excludes, e.g. ["dist/", "*.log"]; also see .devsyncignore
 initial_pull = true          # first sync: download what only the remote has, before pushing
+large_remote_limit_mb = 1024 # bigger remote + nothing chosen yet: ask what to sync first (0 = off)
 delete = false              # remove remote files deleted locally
 max_delete = 200             # safety cap for deletions without --force
 retries = 0                  # 0 = keep retrying until the network is back

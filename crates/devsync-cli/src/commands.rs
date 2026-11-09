@@ -71,6 +71,9 @@ pub fn run(cli: Cli) -> i32 {
         Cmd::Ls { paths, changed, all } => ls(&g, &paths, changed, all),
         Cmd::Status => status(&g),
         Cmd::Changes => changes(&g),
+        Cmd::Tree { path } => tree(&g, path.as_deref().unwrap_or("")),
+        Cmd::Select { paths, pull, all } => select(&g, &paths, pull, all),
+        Cmd::Unselect { paths } => unselect(&g, &paths),
         Cmd::Doctor => doctor(&g),
         Cmd::Forward { ports } => forward(&g, ports),
         Cmd::Shell => shell(),
@@ -504,6 +507,121 @@ fn collect(g: &Global) -> Result<i32> {
 }
 
 // ------------------------------------------------------------ diagnostics
+
+fn tree(g: &Global, path: &str) -> Result<i32> {
+    use devsync_client::selection::{state, State};
+    let p = project()?;
+    let rep = reporter(g, true, true);
+    let nodes = sync::remote_tree(&p, rep.as_ref(), path)?;
+    let label = |n: &devsync_proto::TreeNode| -> &'static str {
+        if n.excluded {
+            "excluded"
+        } else {
+            match state(&p.config.sync, &n.path) {
+                State::Selected => "selected",
+                State::Partial => "partial",
+                State::NotSelected => "unselected",
+            }
+        }
+    };
+    if g.json {
+        let items: Vec<_> = nodes
+            .iter()
+            .map(|n| {
+                json!({"path": n.path, "dir": n.dir, "size": n.size, "files": n.files,
+                       "complete": n.complete, "excluded": n.excluded, "selection": label(n)})
+            })
+            .collect();
+        print_json(json!({"path": devsync_fs::norm_rel(path), "nodes": items}));
+        return Ok(0);
+    }
+    let shown = devsync_fs::norm_rel(path);
+    println!("{}:{}/{}", p.config.remote.host, p.config.remote.path.trim_end_matches('/'), shown);
+    if nodes.is_empty() {
+        println!("  (empty)");
+    }
+    for n in &nodes {
+        let name = n.path.rsplit('/').next().unwrap_or(&n.path);
+        let name = if n.dir { format!("{name}/") } else { name.to_string() };
+        let mark = match label(n) {
+            "selected" => "[x]",
+            "partial" => "[~]",
+            "unselected" => "[ ]",
+            _ => " - ",
+        };
+        let approx = if n.complete { "  " } else { "≥ " };
+        let detail = if n.excluded {
+            "always excluded".to_string()
+        } else if n.dir {
+            format!("{approx}{:>9}  {approx}{} files", bytes(n.size), n.files)
+        } else {
+            format!("  {:>9}", bytes(n.size))
+        };
+        println!("  {mark} {name:<32} {detail}");
+    }
+    if !g.quiet {
+        println!();
+        println!(
+            "[x] synced  [~] partly  [ ] not synced — change with: devsync select <path> / devsync unselect <path>"
+        );
+    }
+    Ok(0)
+}
+
+fn select(g: &Global, paths: &[String], pull: bool, all: bool) -> Result<i32> {
+    use devsync_client::selection;
+    let p = project()?;
+    if all {
+        selection::reset(&p.root)?;
+        human(g).ok("now syncing the whole project");
+        return Ok(0);
+    }
+    if paths.is_empty() {
+        let s = &p.config.sync;
+        if g.json {
+            print_json(json!({"include": s.include, "ignore": s.ignore}));
+        } else if s.include.is_empty() && s.ignore.is_empty() {
+            println!("syncing the whole project (except built-in excludes)");
+        } else {
+            println!("synced: {}", if s.include.is_empty() { "everything".into() } else { s.include.join(", ") });
+            if !s.ignore.is_empty() {
+                println!("except: {}", s.ignore.join(", "));
+            }
+        }
+        return Ok(0);
+    }
+    for path in paths {
+        selection::select(&p.root, path)?;
+    }
+    if !g.json {
+        human(g).ok(&format!("selected {}", paths.join(", ")));
+    }
+    if pull {
+        let p = project()?; // reload with the new selection
+        let rep = reporter(g, false, false);
+        let stats = sync::pull_paths(&p, rep.as_ref(), paths, false, false)?;
+        if !g.json {
+            human(g).ok(&format!("pulled {} file(s)", stats.updated.len()));
+        }
+    }
+    if g.json {
+        print_json(json!({"event": "selected", "paths": paths}));
+    }
+    Ok(0)
+}
+
+fn unselect(g: &Global, paths: &[String]) -> Result<i32> {
+    let p = project()?;
+    for path in paths {
+        devsync_client::selection::unselect(&p.root, path)?;
+    }
+    if g.json {
+        print_json(json!({"event": "unselected", "paths": paths}));
+    } else {
+        human(g).ok(&format!("no longer syncing {} (left untouched on the remote)", paths.join(", ")));
+    }
+    Ok(0)
+}
 
 fn changes(g: &Global) -> Result<i32> {
     let p = project()?;

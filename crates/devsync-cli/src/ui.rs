@@ -98,6 +98,7 @@ impl Reporter for Human {
             Event::JobUpdated { .. } => {}
             Event::Watching { root } if !quiet => self.ok(&format!("watching {root} (Ctrl-C to stop)")),
             Event::Changed { paths } if verbose => self.line(&format!("{paths} change(s) detected")),
+            Event::NeedsSelection { message } => self.warn(&message),
             Event::Offline { error } => {
                 self.warn(&format!("offline: {error} — changes will be sent when the link is back"))
             }

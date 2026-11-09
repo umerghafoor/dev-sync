@@ -39,6 +39,36 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
 /// Per-directory ignore file understood by devsync (gitignore syntax).
 pub const IGNORE_FILE: &str = ".devsyncignore";
 
+/// Normalises a selection path: `./src/` → `src`.
+pub fn norm_rel(p: &str) -> String {
+    let mut s = p.trim();
+    while let Some(rest) = s.strip_prefix("./") {
+        s = rest;
+    }
+    s.trim_start_matches('/').trim_end_matches('/').to_string()
+}
+
+/// Whether `rel` belongs to a sparse selection (`include`, already
+/// normalised). Directories that merely *lead to* a selected path are
+/// entered, but files in them are not part of the tree.
+pub fn included(rel: &str, is_dir: bool, include: &[String]) -> bool {
+    include.is_empty()
+        || include.iter().any(|i| {
+            i.is_empty()
+                || rel == i
+                || rel.starts_with(&format!("{i}/"))
+                || (is_dir && i.starts_with(&format!("{rel}/")))
+        })
+}
+
+/// Whether a file or directory name matches a built-in exclude.
+pub fn builtin_excluded(name: &str) -> bool {
+    DEFAULT_EXCLUDES.iter().any(|p| match p.strip_prefix('*') {
+        Some(suffix) => name.ends_with(suffix),
+        None => name == *p,
+    })
+}
+
 fn walker(root: &Path, spec: &IgnoreSpec) -> Result<ignore::Walk, FsError> {
     let mut ob = OverrideBuilder::new(root);
     for p in DEFAULT_EXCLUDES.iter().map(|s| s.to_string()).chain(spec.patterns.iter().cloned()) {
@@ -61,6 +91,19 @@ fn walker(root: &Path, spec: &IgnoreSpec) -> Result<ignore::Walk, FsError> {
         .add_custom_ignore_filename(IGNORE_FILE)
         .overrides(ob.build()?)
         .sort_by_file_path(|a, b| a.cmp(b));
+    let include: Vec<String> = spec.include.iter().map(|p| norm_rel(p)).collect();
+    if !include.is_empty() && !include.iter().any(|i| i.is_empty()) {
+        // Prune unselected directories instead of walking them.
+        let root = root.to_path_buf();
+        wb.filter_entry(move |d| {
+            if d.depth() == 0 {
+                return true;
+            }
+            let Some(rel) = to_rel(&root, d.path()) else { return true };
+            let is_dir = d.file_type().is_some_and(|t| t.is_dir());
+            included(&rel, is_dir, &include)
+        });
+    }
     Ok(wb.build())
 }
 
@@ -219,7 +262,8 @@ mod tests {
     #[test]
     fn gitignore_and_patterns_when_enabled() {
         let d = tree();
-        let spec = IgnoreSpec { use_gitignore: true, patterns: vec!["data/".into(), "# comment".into()] };
+        let spec =
+            IgnoreSpec { use_gitignore: true, patterns: vec!["data/".into(), "# comment".into()], include: vec![] };
         let m = scan(d.path(), &spec, &mut HashCache::ephemeral()).unwrap();
         assert_eq!(names(&m), vec![".devsyncignore", ".gitignore", "src/main.py"]);
     }
@@ -234,6 +278,17 @@ mod tests {
         assert_eq!(m[0].kind, EntryKind::Symlink);
         assert_eq!(m[0].link.as_deref(), Some("run.sh"));
         assert_eq!(m[1].mode & 0o111, 0o111);
+    }
+
+    #[test]
+    fn include_selects_paths_and_prunes_the_rest() {
+        let d = tree();
+        let spec = IgnoreSpec { include: vec!["./src/".into(), "data/big.csv".into()], ..Default::default() };
+        let m = scan(d.path(), &spec, &mut HashCache::ephemeral()).unwrap();
+        assert_eq!(names(&m), vec!["data/big.csv", "src/main.py"]);
+        assert!(included("data", true, &["data/big.csv".to_string()]));
+        assert!(!included("data/other.csv", false, &["data/big.csv".to_string()]));
+        assert!(builtin_excluded("node_modules") && builtin_excluded("x.pyc") && !builtin_excluded("src"));
     }
 
     #[test]

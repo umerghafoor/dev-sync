@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
 /// Bumped on any incompatible change to the messages below.
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 
 /// Sent by the agent before anything else. The client discards whatever
 /// precedes it (output from the remote user's shell startup files) and sends
@@ -61,6 +61,26 @@ pub struct IgnoreSpec {
     pub use_gitignore: bool,
     /// Extra gitignore-style exclude patterns from the config file.
     pub patterns: Vec<String>,
+    /// If non-empty, only these paths (files or directories, relative to the
+    /// root) are part of the tree; everything else is skipped without being
+    /// descended into ("sparse sync").
+    pub include: Vec<String>,
+}
+
+/// One entry of a directory listing (`Request::Tree`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TreeNode {
+    /// Path relative to the project root.
+    pub path: String,
+    pub dir: bool,
+    /// Total size in bytes (for directories: as far as counted).
+    pub size: u64,
+    /// Number of files (for directories: as far as counted).
+    pub files: u64,
+    /// False when counting stopped at the time budget (sizes are lower bounds).
+    pub complete: bool,
+    /// Matches a built-in exclude (never synced).
+    pub excluded: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,6 +175,12 @@ pub enum Request {
         id: String,
         ignore: IgnoreSpec,
     },
+    /// List the direct children of `path` ("" = root) with sizes, counting
+    /// for at most `budget_ms` overall. Nothing is read or hashed.
+    Tree {
+        path: String,
+        budget_ms: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -169,6 +195,7 @@ pub enum Response {
     Jobs(Vec<JobInfo>),
     Changes(Vec<Entry>),
     Error { message: String },
+    Tree(Vec<TreeNode>),
 }
 
 #[derive(Debug, thiserror::Error)]

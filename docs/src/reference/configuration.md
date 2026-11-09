@@ -19,7 +19,7 @@ remote subdirectory. Unknown keys are rejected so typos surface immediately.
 | `identity` | ssh default | Private key file |
 | `options` | `[]` | Extra `-o` options, e.g. `["ProxyJump=bastion", "Compression=yes"]` |
 | `multiplex` | `true` | Reuse one TCP connection across devsync's short sessions (ControlMaster). Sessions stay short either way |
-| `control_persist_secs` | `60` | Idle time before that shared connection closes |
+| `control_persist_secs` | `600` | Idle time before that shared connection closes. On high-latency links (VPNs, Tailscale relays) a long value avoids paying the connection setup again |
 | `connect_timeout_secs` | `10` | |
 | `response_timeout_secs` | `120` | Max wait for any single agent response before the session is abandoned and retried |
 
@@ -32,6 +32,8 @@ Login must not prompt: devsync runs ssh with `BatchMode=yes`.
 | --- | --- | --- |
 | `use_gitignore` | `false` | `false`: files matched by `.gitignore` (`.env`, local configs, data) are synced. `true`: they are skipped |
 | `ignore` | `[]` | Extra exclude patterns (gitignore syntax) |
+| `include` | `[]` | Sparse sync: only these paths (files or folders) are synced; others are not even scanned. `[]` = everything. Edited by `devsync select` |
+| `large_remote_limit_mb` | `1024` | If nothing is chosen yet and the remote is bigger than this, the first sync / a whole pull stops and asks what to sync. `0` = never ask |
 | `initial_pull` | `true` | On this machine's first sync, download files that exist only on the remote (differing files are kept locally and saved as `<file>.devsync-remote`) before pushing |
 | `delete` | `false` | Delete remote files that were deleted locally |
 | `max_delete` | `200` | Refuse larger deletions unless `devsync push --force` |

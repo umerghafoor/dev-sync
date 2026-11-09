@@ -348,6 +348,7 @@ pub fn pull_project(p: &Project, rep: &dyn Reporter, dry_run: bool) -> Result<Pu
         let local = local_manifest(p)?;
         rep.event(Event::Connecting { host: p.host_label() });
         let mut s = p.connect()?;
+        large_remote_guard(&mut s, p)?;
         let remote = remote_manifest(&mut s, p.ignore_spec())?;
         let mut snap = Snapshot::load(p);
         let opts = PullOpts { dry_run, force: false, what: "pulling from remote" };
@@ -426,11 +427,65 @@ pub fn list_remote(p: &Project, rep: &dyn Reporter, paths: &[String], all: bool)
     })
 }
 
+/// Whether the user has chosen what to sync (any include, or a path excluded).
+fn has_selection(p: &Project) -> bool {
+    let s = &p.config.sync;
+    !s.include.is_empty() || !s.ignore.is_empty()
+}
+
+/// Guard before syncing a whole remote project that nobody has chosen
+/// from: look at the top level cheaply (no hashing, time-limited sizing)
+/// and refuse if it is large, listing the biggest folders.
+fn large_remote_guard(s: &mut Session, p: &Project) -> Result<()> {
+    let limit = p.config.sync.large_remote_limit_mb.saturating_mul(1024 * 1024);
+    if limit == 0 || has_selection(p) {
+        return Ok(());
+    }
+    let nodes = match s.call(&Request::Tree { path: String::new(), budget_ms: 3000 })? {
+        Response::Tree(n) => n,
+        other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
+    };
+    let mut nodes: Vec<_> = nodes.into_iter().filter(|n| !n.excluded).collect();
+    let total: u64 = nodes.iter().map(|n| n.size).sum();
+    let incomplete = nodes.iter().any(|n| !n.complete);
+    if total <= limit && !incomplete {
+        return Ok(());
+    }
+    nodes.sort_by_key(|n| std::cmp::Reverse(n.size));
+    let fmt = |b: u64| {
+        let mb = b as f64 / 1_048_576.0;
+        if mb >= 1024.0 {
+            format!("{:.1} GB", mb / 1024.0)
+        } else {
+            format!("{mb:.1} MB")
+        }
+    };
+    let biggest: Vec<String> = nodes
+        .iter()
+        .filter(|n| n.dir)
+        .take(5)
+        .map(|n| format!("{}/ {}{}", n.path, if n.complete { "" } else { "≥ " }, fmt(n.size)))
+        .collect();
+    Err(ClientError::NeedsSelection(format!(
+        "the remote project is large ({}{}); choose what to sync before the first sync. \
+         Biggest folders: {}. Browse with `devsync tree`, then e.g. `devsync unselect {}` \
+         (or in VS Code: devsync sidebar → Remote Files). To sync everything anyway, set \
+         sync.large_remote_limit_mb = 0",
+        if incomplete { "at least " } else { "" },
+        fmt(total),
+        biggest.join(", "),
+        nodes.iter().find(|n| n.dir).map(|n| n.path.as_str()).unwrap_or("data")
+    )))
+}
+
 fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushStats> {
     let started = Instant::now();
     let mut local = local_manifest(p)?;
     rep.event(Event::Connecting { host: p.host_label() });
     let mut s = p.connect()?;
+    if !Snapshot::load(p).existed() {
+        large_remote_guard(&mut s, p)?;
+    }
     let remote = match scan_call(&mut s, &Request::Manifest { ignore: p.ignore_spec() })? {
         Response::Manifest(m) => m,
         other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
@@ -634,7 +689,7 @@ pub fn pull(p: &Project, rep: &dyn Reporter, rel: &str, dest_root: Option<&Path>
     p.with_retry(rep, || {
         let mut s = p.connect()?;
         // Explicit pulls ignore the sync excludes: if you ask for it, you get it.
-        let spec = devsync_proto::IgnoreSpec { use_gitignore: false, patterns: Vec::new() };
+        let spec = devsync_proto::IgnoreSpec::default();
         let all = match scan_call(&mut s, &Request::Manifest { ignore: spec })? {
             Response::Manifest(m) => m,
             other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
@@ -659,4 +714,19 @@ pub fn pull(p: &Project, rep: &dyn Reporter, rel: &str, dest_root: Option<&Path>
 
 pub fn short_hash(h: &Hash) -> String {
     hash_hex(h)[..8].to_string()
+}
+
+/// Direct children of a remote directory ("" = project root) with sizes.
+/// Nothing is hashed; sizing of large directories stops at a time budget.
+pub fn remote_tree(p: &Project, rep: &dyn Reporter, rel: &str) -> Result<Vec<devsync_proto::TreeNode>> {
+    let rel = devsync_fs::norm_rel(rel);
+    p.with_retry(rep, || {
+        let mut s = p.connect()?;
+        let r = s.call(&Request::Tree { path: rel.clone(), budget_ms: 3000 })?;
+        s.close();
+        match r {
+            Response::Tree(nodes) => Ok(nodes),
+            other => Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
+        }
+    })
 }

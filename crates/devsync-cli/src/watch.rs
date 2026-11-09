@@ -25,7 +25,7 @@ fn relevant(root: &Path, path: &Path) -> bool {
 }
 
 pub fn run(g: &Global) -> Result<i32> {
-    let p = project()?;
+    let mut p = project()?;
     let rep = reporter(g, false, false);
     let (tx, rx) = channel::<DebounceEventResult>();
     let mut debouncer = new_debouncer(Duration::from_millis(300), tx).context("cannot start file watcher")?;
@@ -48,6 +48,19 @@ pub fn run(g: &Global) -> Result<i32> {
         // Wait for file events, but wake regularly for retries and job collection.
         match rx.recv_timeout(Duration::from_millis(500)) {
             Ok(Ok(events)) => {
+                // Selection or other settings changed: apply them right away.
+                let config = p.root.join(devsync_client::config::CONFIG_FILE);
+                if events.iter().any(|e| e.path == config) {
+                    match project() {
+                        Ok(newp) => {
+                            p = newp;
+                            rep.event(Event::Info { message: "settings changed; reloaded .devsync.toml".into() });
+                            dirty = true;
+                            next_try = Instant::now();
+                        }
+                        Err(e) => rep.event(Event::Warning { message: format!("ignoring invalid .devsync.toml: {e}") }),
+                    }
+                }
                 let n = events.iter().filter(|e| relevant(&p.root, &e.path)).count();
                 if n > 0 {
                     rep.event(Event::Changed { paths: n });
@@ -75,6 +88,12 @@ pub fn run(g: &Global) -> Result<i32> {
                     backoff = (backoff * 2).min(Duration::from_secs(30));
                 }
                 Err(ClientError::Interrupted) => return Ok(0),
+                Err(ClientError::NeedsSelection(message)) => {
+                    // Say it once, then wait until the selection changes.
+                    rep.event(Event::NeedsSelection { message });
+                    dirty = false;
+                    next_try = now + Duration::from_secs(365 * 24 * 3600);
+                }
                 Err(e) => {
                     rep.event(Event::Warning { message: format!("sync failed: {e}") });
                     next_try = now + Duration::from_secs(10);
