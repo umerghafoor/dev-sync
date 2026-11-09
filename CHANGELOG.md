@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `.devsync.toml` is no longer synced to the remote, and `devsync init` no
+  longer creates a `.gitignore` in folders that don't use git.
 - Conflict copies (`*.devsync-remote`) and devsync temp files are never synced.
 - VS Code: the CLI is found in `~/.local/bin` even when the editor does not
   inherit the shell `PATH`.

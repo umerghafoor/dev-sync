@@ -119,9 +119,15 @@ pub fn claude_hook(input: &str, exe: &Path) -> Option<String> {
     )
 }
 
-/// Makes sure `.devsync/` is ignored by git in `root`.
+/// Makes sure `.devsync/` is ignored by git in `root`. Only touches projects
+/// that use git: an existing `.gitignore`, or a git repository at or above
+/// `root`. A plain folder is left untouched.
 pub fn gitignore_state_dir(root: &Path) {
     let gi = root.join(".gitignore");
+    let in_git = root.ancestors().any(|d| d.join(".git").exists());
+    if !gi.exists() && !in_git {
+        return;
+    }
     let text = fs::read_to_string(&gi).unwrap_or_default();
     if text.lines().any(|l| matches!(l.trim(), ".devsync/" | ".devsync" | "/.devsync/" | "/.devsync")) {
         return;
@@ -174,6 +180,16 @@ mod tests {
         let md = fs::read_to_string(d.path().join("CLAUDE.md")).unwrap();
         assert!(md.starts_with("# Project"));
         assert_eq!(md.matches(BEGIN).count(), 1);
+    }
+
+    #[test]
+    fn gitignore_left_alone_outside_git() {
+        let d = tempfile::tempdir().unwrap();
+        gitignore_state_dir(d.path());
+        assert!(!d.path().join(".gitignore").exists(), "plain folders get no .gitignore");
+        fs::create_dir(d.path().join(".git")).unwrap();
+        gitignore_state_dir(d.path());
+        assert_eq!(fs::read_to_string(d.path().join(".gitignore")).unwrap(), ".devsync/\n");
     }
 
     #[test]

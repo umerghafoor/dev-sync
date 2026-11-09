@@ -17,6 +17,8 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
     ".svn",
     crate::CLIENT_STATE_DIR,
     crate::AGENT_STATE_DIR,
+    // the local connection settings; the remote has no use for them
+    ".devsync.toml",
     "node_modules",
     "__pycache__",
     "*.pyc",
@@ -189,6 +191,7 @@ mod tests {
             ("data/big.csv", "1,2"),
             ("logs/a.log", "x"),
             ("src/main.py.devsync-remote", "conflict copy"),
+            (".devsync.toml", "[remote]"),
         ] {
             fs::create_dir_all(r.join(p).parent().unwrap()).unwrap();
             fs::write(r.join(p), c).unwrap();

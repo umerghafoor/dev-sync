@@ -11,8 +11,9 @@ cd ~/code/myproject
 devsync init you@server:~/myproject
 ```
 
-This writes `.devsync.toml` (commit it if your team shares the remote) and
-adds `.devsync/` to `.gitignore`.
+This writes `.devsync.toml` (commit it if your team shares the remote; it is
+never sent to the remote) and, if the project uses git, adds `.devsync/` to
+`.gitignore`.
 
 ## 2. Check the setup
 

@@ -38,7 +38,7 @@ Login must not prompt: devsync runs ssh with `BatchMode=yes`.
 
 Always excluded: `.git`, `.hg`, `.svn`, `.devsync`, `.devsync-agent`,
 `node_modules`, `__pycache__`, `*.pyc`, `.venv`, `venv`, `.mypy_cache`,
-`.pytest_cache`, `.ruff_cache`, `.DS_Store`, `.idea`, and devsync's own conflict copies (`*.devsync-remote`) and temp files.
+`.pytest_cache`, `.ruff_cache`, `.DS_Store`, `.idea`, and devsync's own `.devsync.toml`, conflict copies (`*.devsync-remote`) and temp files.
 
 `.devsyncignore` files (gitignore syntax, any directory) add more excludes.
 Excluded files are left alone on the remote, even with `delete = true`.
@@ -81,6 +81,6 @@ in interactive shells.
 
 | Path | Side | Contents |
 | --- | --- | --- |
-| `.devsync/` | local (add to `.gitignore`; `init` does) | hash cache, sync snapshot, remote info, `jobs/<id>/{command,output.log,status.json}` |
+| `.devsync/` | local (`init` adds it to `.gitignore` in git projects) | hash cache, sync snapshot, remote info, `jobs/<id>/{command,output.log,status.json}` |
 | `.devsync-agent/` | remote project | hash cache, partial uploads, `jobs/<id>/` |
 | `~/.devsync/bin/` | remote home | agent binaries |

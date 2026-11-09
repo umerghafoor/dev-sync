@@ -29,7 +29,7 @@ Everything in the project directory except:
 1. **Built-in excludes**, which are always skipped: `.git`, `.hg`, `.svn`,
    `node_modules`, `__pycache__`, `*.pyc`, `.venv`, `venv`, `.mypy_cache`,
    `.pytest_cache`, `.ruff_cache`, `.DS_Store`, `.idea`, and devsync's own
-   `.devsync/`, `.devsync-agent/`, conflict copies (`*.devsync-remote`) and
+   `.devsync.toml`, `.devsync/`, `.devsync-agent/`, conflict copies (`*.devsync-remote`) and
    temp files. Dependencies and virtualenvs are
    platform-specific, so recreate them on the remote with
    `devsync exec -- npm ci` or `devsync exec -- pip install -r requirements.txt`.
