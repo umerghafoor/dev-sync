@@ -1,145 +1,146 @@
+<div align="center">
+
 # devsync
 
-**Edit locally, run remotely.** Write code (or let a coding agent write it) on
-your own machine, and run it on a remote one: a GPU box, a lab server, a dev
-VM, a Raspberry Pi. Built for connections that drop.
+**Edit locally, run remotely.**<br>
+Sync and remote execution for flaky connections, for you and your coding agent.
 
-```text
- your machine                                    remote machine
- ─────────────                                   ──────────────
- editor / Claude Code                            
-   │ save                                        
-   ▼                                             
- devsync ── short ssh session: changed files ──▶ agent ──▶ project files
-   │                                               │
-   │ ── short session: "run pytest" ─────────────▶ │ ──▶ job (detached, keeps running
-   │                                               │      if the link drops)
-   │ ◀─ short sessions: new output, exit code ──── │      output.log, exit_code
-   ▼                                             
- .devsync/jobs/<id>/output.log   ◀── pull-back of files the job created
-```
+[![CI](https://github.com/OWNER/devsync/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/devsync/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/OWNER/devsync?sort=semver)](https://github.com/OWNER/devsync/releases)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://OWNER.github.io/devsync/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Why
+[Documentation](https://OWNER.github.io/devsync/) ·
+[Quick start](#quick-start) ·
+[VS Code extension](extensions/vscode/README.md) ·
+[Changelog](CHANGELOG.md) ·
+[Contributing](CONTRIBUTING.md)
 
-| Approach | Problem on a flaky link |
-| --- | --- |
-| VS Code Remote-SSH, editing over sshfs | The editor (and your agent) freeze or die when the connection does |
-| `ssh host pytest` | A dropped connection kills the command and its output |
-| rsync | One-shot, no retries, no notion of running anything; macOS ships openrsync with a reduced flag set |
-| Mutagen, Unison, Syncthing | Two-way sync daemons: powerful but heavy, and they don't run commands |
-| git push + pull | You commit just to test; secrets and generated files need special handling |
+</div>
 
-devsync keeps **all editing local** and treats the remote as a place to *run*
-things:
+---
+
+devsync is for when you write code on one machine and run it on another: a
+GPU server, a lab workstation, a cloud VM, a Raspberry Pi. You and your
+coding agent edit locally at full speed, and the code runs on the remote as
+if it were local. A dropped connection never freezes your editor or kills a
+running command.
+
+<p align="center">
+  <img src="docs/src/assets/architecture.svg" alt="How devsync works: your machine pushes changed files and starts commands on the remote over short ssh sessions; the command runs detached; output, exit code and generated files are collected back into .devsync/jobs." width="860">
+</p>
+
+## Features
 
 - **No long-lived connections.** Every operation is a short ssh session.
-  Commands run detached on the remote; their output and exit code are written
-  to files there and collected into `.devsync/jobs/<id>/` locally by later
-  short sessions. A dropped connection only delays output.
-- **Resumable, verified transfers.** Content-hashed (BLAKE3), lz4-compressed,
-  resumed after interruptions, written atomically.
-- **Feels local.** `devsync exec pytest` runs in the remote directory that
-  matches your current one, streams output, keeps the exit code, and copies
-  back files the command created (lockfiles, generated code). It never
-  overwrites a local edit: conflicts are saved as `<file>.devsync-remote`.
-- **Agent-ready.** A Claude Code hook routes code-executing shell commands to
-  the remote automatically. Git, grep and file edits stay local.
-- **Zero setup on the remote.** devsync uploads a small static agent binary
-  over ssh the first time and reuses it after that. Supported remotes: Linux
-  x86_64 and arm64, and macOS with the same architecture as your machine.
-- **VS Code extension** with sync status, remote runs, and a jobs view.
+  Commands run detached on the remote; output and exit codes are collected
+  into `.devsync/jobs/<id>/` locally. A dropped link only delays output.
+- **Feels local.** `devsync exec -- pytest` runs in the matching remote
+  directory, streams output, keeps the exit code, and brings back files the
+  command generated, without ever overwriting your local edits.
+- **Resumable, verified sync.** Content-hashed (BLAKE3), compressed, resumed
+  after interruptions, written atomically. Gitignored files such as `.env`
+  are synced; `node_modules`, `.venv` and `.git` are not.
+- **Coding-agent integration.** A Claude Code hook sends test, build and
+  install commands to the remote automatically. `AGENTS.md` instructions
+  cover other agents.
+- **Nothing to install remotely.** A small static agent is uploaded over ssh
+  on first use (Linux x86_64/arm64, any distribution).
+- **VS Code extension** with sync status, remote runs, a jobs view, a remote
+  shell and conflict diffs.
+- **Built for bad networks.** Backoff with jitter, keepalives, timeouts, an
+  offline queue in watch mode, and resumable uploads.
 
 ## Quick start
 
-Requirements: key-based ssh to the remote (`ssh you@box` works without a
-password prompt). Nothing needs to be installed on the remote.
+Requirements: ssh access to the remote without a password prompt
+(`ssh you@server true` works). Nothing needs to be installed there.
+
+**Install** (from a [release](https://github.com/OWNER/devsync/releases) archive, or from source with Rust 1.88+):
 
 ```bash
-# build and install (needs Rust; installs to ~/.local/bin)
+git clone https://github.com/OWNER/devsync.git
+cd devsync
 make install
-
-cd ~/code/myproject
-devsync init you@box:~/myproject   # writes .devsync.toml
-devsync doctor                     # checks ssh, deploys the agent, runs a test command
-devsync exec -- pytest -x          # sync, run remotely, stream output
 ```
 
-Day to day:
+If `devsync` is then not found, add `~/.local/bin` to your `PATH`:
 
 ```bash
-devsync watch                      # push on every save (keeps working offline)
-devsync exec -- npm test           # run and wait (Ctrl-C stops the remote command)
-devsync submit -- python train.py  # start in background, prints a job id
-devsync logs                       # follow the latest job (Ctrl-C detaches)
-devsync jobs                       # list jobs; results live in .devsync/jobs/<id>/
-devsync kill <id>
-devsync shell                      # interactive shell in the matching remote dir
-devsync forward 8000               # localhost:8000 → remote:8000, auto-reconnecting
-devsync pull results/              # fetch remote files
-devsync status                     # link, pending changes, running jobs
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
 ```
+
+**Use it** in your project:
+
+```bash
+cd ~/code/myproject
+devsync init you@server:~/myproject
+devsync doctor
+devsync exec -- pytest -x
+```
+
+**Day to day:**
+
+| Command | What it does |
+| --- | --- |
+| `devsync watch` | Push on every save; keeps working offline |
+| `devsync exec -- <cmd>` | Sync, run remotely, stream output, return the exit code |
+| `devsync submit -- <cmd>` | Start a background job; prints its id |
+| `devsync logs [id]` | Follow a job (Ctrl-C detaches) |
+| `devsync jobs` / `devsync kill [id]` | List / stop jobs |
+| `devsync shell` | Interactive shell in the matching remote directory |
+| `devsync forward 3000` | `localhost:3000` → remote port 3000, auto-reconnecting |
+| `devsync pull <path>` | Copy files from the remote |
+| `devsync status` | Link state, pending changes, running jobs |
+| `devsync setup claude` | Route Claude Code's commands to the remote |
+
+Full guide: **[documentation](https://OWNER.github.io/devsync/)** (also
+readable in [`docs/src`](docs/src/SUMMARY.md)).
 
 ## Coding agents
 
 ```bash
-devsync setup claude      # Claude Code: PreToolUse hook + CLAUDE.md instructions
-devsync setup agents-md   # AGENTS.md instructions for other agents
+devsync setup claude
+devsync setup agents-md
 ```
 
-With the hook installed, when Claude Code runs `pytest`, `npm install`,
-`python app.py`, `make` and the like, devsync syncs first, runs the command on the
-remote, and returns the output and exit code as if it had run locally. Reading,
-searching, editing and `git` stay local. End a command with `# local` or
-`# remote` to override. Lists of extra local or remote commands can be set in
-`.devsync.toml`.
+With the Claude Code hook installed, `pytest`, `npm install`,
+`python app.py`, `make` and similar commands run on the remote. Output and
+exit code come back as if they ran locally. `git`, `grep` and file edits stay
+local. See [Coding agents](docs/src/guide/coding-agents.md).
 
 ## VS Code
 
-```bash
-make vscode
-code --install-extension extensions/vscode/devsync-*.vsix
-```
-
-The extension adds sync state to the status bar (auto sync), run-remotely
-commands, a **Remote Jobs** view (output opens straight from the local results
-folder), a remote-shell terminal profile, conflict diffs, and one-click setup.
-See [extensions/vscode/README.md](extensions/vscode/README.md).
-
-## Configuration
-
-`.devsync.toml` at the project root. Excludes are set there and in
-`.devsyncignore` files (gitignore syntax). By default `.gitignore`'d files
-such as `.env` **are** synced; dependency folders (`node_modules`, `.venv`,
-`.git`, …) never are. Full reference: [docs/CONFIG.md](docs/CONFIG.md).
+Download `devsync-<version>.vsix` from a release (or run `make vscode`), then
+use **Extensions → ⋯ → Install from VSIX…** in VS Code. See the
+[extension README](extensions/vscode/README.md).
 
 ## How it works
 
-Five crates, each with a single job:
-
 | Crate | Role |
 | --- | --- |
-| `devsync-proto` | Framed bincode protocol shared by both sides |
-| `devsync-fs` | Ignore rules, hashing with cache, sync planning, atomic writes |
-| `devsync-agent` | Remote endpoint: transfers and detached job supervisor |
-| `devsync-transport` | Short ssh/local sessions, agent deployment, retry/backoff |
-| `devsync-client` | Push, pull-back, job collection, agent hook |
-| `devsync-cli` | The `devsync` binary (also the agent) |
+| [`devsync-proto`](crates/devsync-proto) | Framed bincode protocol shared by both sides |
+| [`devsync-fs`](crates/devsync-fs) | Ignore rules, hashing with cache, sync planning, atomic writes |
+| [`devsync-agent`](crates/devsync-agent) | Remote endpoint: transfers and detached job supervisor |
+| [`devsync-transport`](crates/devsync-transport) | Short ssh/local sessions, agent deployment, retry/backoff |
+| [`devsync-client`](crates/devsync-client) | Push, pull-back, job collection, agent hook |
+| [`devsync-cli`](crates/devsync-cli) | The `devsync` binary (client and agent) |
 
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Design details: [How it works](docs/src/architecture.md) ·
+Comparison: [devsync vs Remote-SSH, rsync, Mutagen, …](docs/src/comparison.md)
 
-## Development
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
+the [Code of Conduct](CODE_OF_CONDUCT.md). To report a vulnerability, follow
+[SECURITY.md](SECURITY.md) rather than opening a public issue.
 
 ```bash
-make check     # rustfmt, clippy -D warnings, all tests
-make agents    # static Linux builds (rust-lld; no cross toolchain needed)
-make dist      # release tarball with client + agents
-make vscode    # extension .vsix
+make check
+make docs-serve
 ```
-
-The end-to-end tests (`crates/devsync-cli/tests/e2e.rs`) drive the real
-binary against a local agent and through a fake `ssh`. They cover agent
-deployment, outages, conflicts and detached jobs.
 
 ## License
 
-MIT
+[MIT](LICENSE) © Umer Ghafoor and devsync contributors.

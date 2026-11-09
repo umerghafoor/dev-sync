@@ -130,7 +130,7 @@ impl Config {
     /// Commented template written by `devsync init`.
     pub fn template(host: &str, path: &str) -> String {
         format!(
-            r#"# devsync project configuration (reference: docs/CONFIG.md)
+            r#"# devsync project configuration (reference: docs/src/reference/configuration.md)
 
 [remote]
 host = {host:?}          # user@host, ~/.ssh/config alias, or "local"

@@ -1,0 +1,16 @@
+[book]
+title = "devsync"
+description = "Edit locally, run remotely — sync and remote execution built for flaky connections."
+authors = ["devsync contributors"]
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/OWNER/devsync"
+edit-url-template = "https://github.com/OWNER/devsync/edit/main/docs/{path}"
+site-url = "/devsync/"
+default-theme = "light"
+preferred-dark-theme = "navy"
+
+[output.html.search]
+enable = true
