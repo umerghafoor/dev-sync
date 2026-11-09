@@ -91,27 +91,61 @@ pub struct JobInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Request {
-    Hello { version: u32 },
+    Hello {
+        version: u32,
+    },
     /// Full manifest of the remote tree.
-    Manifest { ignore: IgnoreSpec },
+    Manifest {
+        ignore: IgnoreSpec,
+    },
     /// For each (path, hash) about to be uploaded: bytes already received in
     /// an earlier, interrupted session (resume point).
-    PartialOffsets { files: Vec<Hash> },
+    PartialOffsets {
+        files: Vec<Hash>,
+    },
     /// Append lz4-compressed data to the partial upload for `hash`.
-    PutChunk { hash: Hash, offset: u64, data: Vec<u8> },
+    PutChunk {
+        hash: Hash,
+        offset: u64,
+        data: Vec<u8>,
+    },
     /// Verify the partial upload and atomically move it into place.
-    PutCommit { path: String, hash: Hash, mode: u32, mtime_ns: i128 },
-    PutSymlink { path: String, target: String },
-    Delete { paths: Vec<String> },
+    PutCommit {
+        path: String,
+        hash: Hash,
+        mode: u32,
+        mtime_ns: i128,
+    },
+    PutSymlink {
+        path: String,
+        target: String,
+    },
+    Delete {
+        paths: Vec<String>,
+    },
     /// Read a chunk of a remote file (lz4-compressed in the response).
-    GetChunk { path: String, offset: u64 },
-    JobStart { spec: JobSpec },
+    GetChunk {
+        path: String,
+        offset: u64,
+    },
+    JobStart {
+        spec: JobSpec,
+    },
     /// Fetch job output from `offset` (at most `max_bytes`) plus its state.
-    JobPoll { id: String, offset: u64, max_bytes: u32 },
-    JobKill { id: String },
+    JobPoll {
+        id: String,
+        offset: u64,
+        max_bytes: u32,
+    },
+    JobKill {
+        id: String,
+    },
     JobList,
     /// Files whose content changed since the job started.
-    JobChanges { id: String, ignore: IgnoreSpec },
+    JobChanges {
+        id: String,
+        ignore: IgnoreSpec,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

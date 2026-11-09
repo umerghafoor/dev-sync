@@ -58,11 +58,7 @@ fn walker(root: &Path, spec: &IgnoreSpec) -> Result<ignore::Walk, FsError> {
 }
 
 fn mtime_ns(md: &Metadata) -> i128 {
-    md.modified()
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_nanos() as i128)
-        .unwrap_or(0)
+    md.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_nanos() as i128).unwrap_or(0)
 }
 
 pub fn hash_file(path: &Path) -> std::io::Result<Hash> {

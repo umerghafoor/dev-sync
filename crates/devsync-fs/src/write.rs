@@ -54,10 +54,8 @@ pub fn commit_file(root: &Path, staged: &Path, dest: &Path, mode: u32, mtime_ns:
 /// Writes `bytes` to `dest` atomically (via a sibling temp file).
 pub fn write_file(root: &Path, dest: &Path, bytes: &[u8], mode: u32, mtime_ns: i128) -> Result<(), FsError> {
     prepare_parent(root, dest)?;
-    let tmp = dest.with_file_name(format!(
-        ".{}.devsync-tmp",
-        dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
-    ));
+    let tmp = dest
+        .with_file_name(format!(".{}.devsync-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
     fs::write(&tmp, bytes).map_err(io_err(&tmp))?;
     commit_file(root, &tmp, dest, mode, mtime_ns)
 }

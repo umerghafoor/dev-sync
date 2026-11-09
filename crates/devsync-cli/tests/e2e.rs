@@ -185,12 +185,8 @@ fn exec_job_survives_while_no_session_is_open() {
 fn claude_hook_and_setup() {
     let env = setup();
     let run_hook = |cmd: &str| -> String {
-        let mut child = Command::new(bin())
-            .args(["hook", "claude"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
+        let mut child =
+            Command::new(bin()).args(["hook", "claude"]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
         let input = serde_json::json!({"tool_name": "Bash", "cwd": env.local, "tool_input": {"command": cmd}});
         use std::io::Write;
         child.stdin.take().unwrap().write_all(input.to_string().as_bytes()).unwrap();

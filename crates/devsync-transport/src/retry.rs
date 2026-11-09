@@ -22,10 +22,8 @@ impl RetryPolicy {
         let exp = self.base.saturating_mul(1u32 << attempt.min(16));
         let capped = exp.min(self.max);
         // +-20% jitter so many clients do not retry in lockstep.
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.subsec_nanos())
-            .unwrap_or(0);
+        let nanos =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
         let factor = 0.8 + (nanos % 1000) as f64 / 2500.0;
         capped.mul_f64(factor)
     }
@@ -77,14 +75,18 @@ mod tests {
     fn retries_transient_then_succeeds() {
         let p = RetryPolicy { max_attempts: 5, base: Duration::from_millis(1), max: Duration::from_millis(2) };
         let mut n = 0;
-        let r: Result<u32, TransportError> = retry(&p, |_, _, _| {}, || {
-            n += 1;
-            if n < 3 {
-                Err(TransportError::Connect("down".into()))
-            } else {
-                Ok(n)
-            }
-        });
+        let r: Result<u32, TransportError> = retry(
+            &p,
+            |_, _, _| {},
+            || {
+                n += 1;
+                if n < 3 {
+                    Err(TransportError::Connect("down".into()))
+                } else {
+                    Ok(n)
+                }
+            },
+        );
         assert_eq!(r.unwrap(), 3);
     }
 
@@ -92,17 +94,25 @@ mod tests {
     fn stops_on_fatal_and_on_limit() {
         let p = RetryPolicy { max_attempts: 3, base: Duration::from_millis(1), max: Duration::from_millis(1) };
         let mut n = 0;
-        let r: Result<(), TransportError> = retry(&p, |_, _, _| {}, || {
-            n += 1;
-            Err(TransportError::Fatal("auth".into()))
-        });
+        let r: Result<(), TransportError> = retry(
+            &p,
+            |_, _, _| {},
+            || {
+                n += 1;
+                Err(TransportError::Fatal("auth".into()))
+            },
+        );
         assert!(r.is_err());
         assert_eq!(n, 1);
         n = 0;
-        let r: Result<(), TransportError> = retry(&p, |_, _, _| {}, || {
-            n += 1;
-            Err(TransportError::Timeout(Duration::from_secs(1)))
-        });
+        let r: Result<(), TransportError> = retry(
+            &p,
+            |_, _, _| {},
+            || {
+                n += 1;
+                Err(TransportError::Timeout(Duration::from_secs(1)))
+            },
+        );
         assert!(r.is_err());
         assert_eq!(n, 3);
     }

@@ -32,10 +32,7 @@ pub struct HashCache {
 }
 
 pub fn now_ns() -> i128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as i128)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as i128).unwrap_or(0)
 }
 
 impl HashCache {
@@ -47,10 +44,7 @@ impl HashCache {
     /// Loads the cache from `file`; a missing or corrupt file yields an empty cache.
     pub fn load(file: impl Into<PathBuf>) -> Self {
         let file = file.into();
-        let old = std::fs::read(&file)
-            .ok()
-            .and_then(|b| bincode::deserialize::<Data>(&b).ok())
-            .unwrap_or_default();
+        let old = std::fs::read(&file).ok().and_then(|b| bincode::deserialize::<Data>(&b).ok()).unwrap_or_default();
         Self { file: Some(file), old, new: HashMap::new(), dirty: false }
     }
 
@@ -63,11 +57,8 @@ impl HashCache {
     /// Records an entry seen in the current scan. Entries not recorded are
     /// dropped on save, so the cache never grows with deleted files.
     pub fn put(&mut self, rel: &str, size: u64, mtime_ns: i128, hash: Hash) {
-        let changed = self
-            .old
-            .items
-            .get(rel)
-            .is_none_or(|o| o.size != size || o.mtime_ns != mtime_ns || o.hash != hash);
+        let changed =
+            self.old.items.get(rel).is_none_or(|o| o.size != size || o.mtime_ns != mtime_ns || o.hash != hash);
         self.dirty |= changed;
         self.new.insert(rel.to_string(), Item { size, mtime_ns, hash });
     }

@@ -57,7 +57,8 @@ fn stderr_tail(buf: &Arc<Mutex<Vec<u8>>>) -> String {
 /// Classifies an ssh failure from its exit code and stderr.
 pub(crate) fn classify_ssh_failure(code: Option<i32>, stderr: &str) -> TransportError {
     let s = stderr.to_ascii_lowercase();
-    if s.contains("permission denied") || s.contains("host key verification failed") || s.contains("bad configuration") {
+    if s.contains("permission denied") || s.contains("host key verification failed") || s.contains("bad configuration")
+    {
         return TransportError::Fatal(format!(
             "ssh refused: {}. devsync needs non-interactive (key-based) ssh login; check `ssh {}`",
             stderr.lines().last().unwrap_or(stderr),
@@ -74,7 +75,8 @@ impl Session {
         // Own process group: Ctrl-C in the terminal must not kill in-flight
         // sessions (the client handles interruption itself).
         cmd.process_group(0);
-        let mut child = cmd.spawn().map_err(|e| TransportError::Fatal(format!("cannot run {:?}: {e}", cmd.get_program())))?;
+        let mut child =
+            cmd.spawn().map_err(|e| TransportError::Fatal(format!("cannot run {:?}: {e}", cmd.get_program())))?;
         let stdout = child.stdout.take().expect("piped stdout");
         let stdin = child.stdin.take().expect("piped stdin");
         let mut err_pipe = child.stderr.take().expect("piped stderr");
@@ -147,7 +149,9 @@ impl Session {
                 self.info = RemoteInfo { os, arch, root, agent_version, agent_name: None };
                 Ok(self)
             }
-            Ok(other) => Err(Handshake::Failed(TransportError::Fatal(format!("unexpected handshake reply: {other:?}")))),
+            Ok(other) => {
+                Err(Handshake::Failed(TransportError::Fatal(format!("unexpected handshake reply: {other:?}"))))
+            }
             Err(TransportError::Remote(m)) if m.contains("protocol mismatch") => Err(Handshake::AgentMissing),
             Err(e) => Err(self.diagnose(e)),
         }

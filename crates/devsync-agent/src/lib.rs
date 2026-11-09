@@ -67,9 +67,7 @@ impl Agent {
         match req {
             Request::Hello { version } => {
                 if version != PROTOCOL_VERSION {
-                    return Err(format!(
-                        "protocol mismatch: client {version}, agent {PROTOCOL_VERSION}"
-                    ));
+                    return Err(format!("protocol mismatch: client {version}, agent {PROTOCOL_VERSION}"));
                 }
                 jobs::gc(&self.state);
                 files::gc(&self.state);

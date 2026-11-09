@@ -34,11 +34,7 @@ pub fn same(src: &Entry, dst: &Entry) -> bool {
 
 pub fn plan(src: &[Entry], dst: &[Entry], delete: bool) -> Plan {
     let dst_map: HashMap<&str, &Entry> = dst.iter().map(|e| (e.path.as_str(), e)).collect();
-    let upload = src
-        .iter()
-        .filter(|s| dst_map.get(s.path.as_str()).is_none_or(|d| !same(s, d)))
-        .cloned()
-        .collect();
+    let upload = src.iter().filter(|s| dst_map.get(s.path.as_str()).is_none_or(|d| !same(s, d))).cloned().collect();
     let delete = if delete {
         let src_set: std::collections::HashSet<&str> = src.iter().map(|e| e.path.as_str()).collect();
         dst.iter().filter(|d| !src_set.contains(d.path.as_str())).map(|d| d.path.clone()).collect()
@@ -53,15 +49,7 @@ mod tests {
     use super::*;
 
     fn e(path: &str, h: u8, mode: u32) -> Entry {
-        Entry {
-            path: path.into(),
-            kind: EntryKind::File,
-            size: 1,
-            mode,
-            mtime_ns: 0,
-            hash: [h; 32],
-            link: None,
-        }
+        Entry { path: path.into(), kind: EntryKind::File, size: 1, mode, mtime_ns: 0, hash: [h; 32], link: None }
     }
 
     #[test]

@@ -72,10 +72,9 @@ impl Reporter for Human {
             Event::Connected { os, arch, root, agent_version } if verbose => {
                 self.line(&format!("agent {agent_version} on {os}/{arch}, root {root}"))
             }
-            Event::Retrying { attempt, error, delay_ms } => self.warn(&format!(
-                "network problem ({error}) — retry #{attempt} in {:.1}s",
-                delay_ms as f64 / 1000.0
-            )),
+            Event::Retrying { attempt, error, delay_ms } => {
+                self.warn(&format!("network problem ({error}) — retry #{attempt} in {:.1}s", delay_ms as f64 / 1000.0))
+            }
             Event::Planned { upload, upload_bytes, delete } if verbose && (upload > 0 || delete > 0) => {
                 self.line(&format!("{upload} file(s) to upload ({}), {delete} to delete", bytes(upload_bytes)))
             }
@@ -99,7 +98,9 @@ impl Reporter for Human {
             Event::JobUpdated { .. } => {}
             Event::Watching { root } if !quiet => self.ok(&format!("watching {root} (Ctrl-C to stop)")),
             Event::Changed { paths } if verbose => self.line(&format!("{paths} change(s) detected")),
-            Event::Offline { error } => self.warn(&format!("offline: {error} — changes will be sent when the link is back")),
+            Event::Offline { error } => {
+                self.warn(&format!("offline: {error} — changes will be sent when the link is back"))
+            }
             Event::Warning { message } => self.warn(&message),
             Event::Info { message } if !quiet => self.line(&message),
             _ => {}

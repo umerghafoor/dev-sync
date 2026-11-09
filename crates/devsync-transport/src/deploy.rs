@@ -87,7 +87,12 @@ pub struct Output {
 }
 
 /// Runs a one-shot remote command, optionally feeding a file to its stdin.
-pub fn run(ssh: &SshConfig, remote_cmd: &str, stdin: Option<&Path>, timeout: Duration) -> Result<Output, TransportError> {
+pub fn run(
+    ssh: &SshConfig,
+    remote_cmd: &str,
+    stdin: Option<&Path>,
+    timeout: Duration,
+) -> Result<Output, TransportError> {
     let mut c: Command = ssh.command();
     c.arg("-T").arg(&ssh.host).arg(remote_cmd);
     c.stdout(Stdio::piped()).stderr(Stdio::piped());

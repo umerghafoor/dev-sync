@@ -113,15 +113,11 @@ impl Target {
         match &self.endpoint {
             Endpoint::Ssh(ssh) => {
                 let root = remote_path_expr(&self.root);
-                let dir = if rel.is_empty() {
-                    root.clone()
-                } else {
-                    format!("{root}/{}", sh_quote(rel))
-                };
+                let dir = if rel.is_empty() { root.clone() } else { format!("{root}/{}", sh_quote(rel)) };
                 let mut c = ssh.command();
-                c.arg("-t").arg(&ssh.host).arg(format!(
-                    "cd {dir} 2>/dev/null || cd {root}; exec \"${{SHELL:-sh}}\" -l"
-                ));
+                c.arg("-t")
+                    .arg(&ssh.host)
+                    .arg(format!("cd {dir} 2>/dev/null || cd {root}; exec \"${{SHELL:-sh}}\" -l"));
                 c
             }
             Endpoint::Local => {

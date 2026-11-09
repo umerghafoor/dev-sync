@@ -17,18 +17,11 @@ fn partial(state: &Path, hash: &Hash) -> PathBuf {
 
 pub fn manifest(root: &Path, state: &Path, ignore: &IgnoreSpec) -> Result<Response, String> {
     let mut cache = HashCache::load(state.join("hash-cache.bin"));
-    devsync_fs::scan(root, ignore, &mut cache)
-        .map(Response::Manifest)
-        .map_err(|e| e.to_string())
+    devsync_fs::scan(root, ignore, &mut cache).map(Response::Manifest).map_err(|e| e.to_string())
 }
 
 pub fn partial_offsets(state: &Path, hashes: &[Hash]) -> Response {
-    Response::Offsets(
-        hashes
-            .iter()
-            .map(|h| fs::metadata(partial(state, h)).map(|m| m.len()).unwrap_or(0))
-            .collect(),
-    )
+    Response::Offsets(hashes.iter().map(|h| fs::metadata(partial(state, h)).map(|m| m.len()).unwrap_or(0)).collect())
 }
 
 pub fn put_chunk(state: &Path, hash: &Hash, offset: u64, data: &[u8]) -> Result<Response, String> {

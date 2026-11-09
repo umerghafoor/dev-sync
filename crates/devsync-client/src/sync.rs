@@ -165,7 +165,11 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
         other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
     };
     let plan = devsync_fs::plan(&local, &remote, p.config.sync.delete);
-    rep.event(Event::Planned { upload: plan.upload.len(), upload_bytes: plan.upload_bytes(), delete: plan.delete.len() });
+    rep.event(Event::Planned {
+        upload: plan.upload.len(),
+        upload_bytes: plan.upload_bytes(),
+        delete: plan.delete.len(),
+    });
     if plan.delete.len() > p.config.sync.max_delete && !opts.force {
         return Err(ClientError::Refused(format!(
             "refusing to delete {} remote files (sync.max_delete = {}). Re-run with --force if intended",
@@ -194,11 +198,12 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
     let mut pipe = Pipe { s: &mut s, inflight: 0 };
     for e in &plan.upload {
         match e.kind {
-            EntryKind::File => upload_file(&mut pipe, &p.root, e, offset_of.get(e.path.as_str()).copied().unwrap_or(0))?,
-            EntryKind::Symlink => pipe.send(&Request::PutSymlink {
-                path: e.path.clone(),
-                target: e.link.clone().unwrap_or_default(),
-            })?,
+            EntryKind::File => {
+                upload_file(&mut pipe, &p.root, e, offset_of.get(e.path.as_str()).copied().unwrap_or(0))?
+            }
+            EntryKind::Symlink => {
+                pipe.send(&Request::PutSymlink { path: e.path.clone(), target: e.link.clone().unwrap_or_default() })?
+            }
         }
         stats.files += 1;
         stats.bytes += e.size;

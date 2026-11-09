@@ -353,10 +353,8 @@ fn logs(g: &Global, id: Option<&str>, no_follow: bool) -> Result<i32> {
 }
 
 fn age(started: i64) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+    let now =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
     let s = (now - started).max(0);
     match s {
         _ if started == 0 => "?".into(),
@@ -375,8 +373,10 @@ fn list_jobs(g: &Global, remote: bool) -> Result<i32> {
         if g.json {
             let v: Vec<_> = list
                 .iter()
-                .map(|j| json!({"id": j.id, "command": j.command, "cwd": j.cwd, "started_unix": j.started_unix,
-                    "state": format!("{:?}", j.state), "output_len": j.output_len}))
+                .map(|j| {
+                    json!({"id": j.id, "command": j.command, "cwd": j.cwd, "started_unix": j.started_unix,
+                    "state": format!("{:?}", j.state), "output_len": j.output_len})
+                })
                 .collect();
             print_json(json!(v));
         } else {
@@ -465,10 +465,9 @@ fn status(g: &Global) -> Result<i32> {
     println!("project   {}", p.root.display());
     println!("remote    {}:{}", p.config.remote.host, p.config.remote.path);
     match conn {
-        Ok(i) => println!(
-            "link      ok ({latency} ms) — agent {} on {}/{}, root {}",
-            i.agent_version, i.os, i.arch, i.root
-        ),
+        Ok(i) => {
+            println!("link      ok ({latency} ms) — agent {} on {}/{}, root {}", i.agent_version, i.os, i.arch, i.root)
+        }
         Err(e) => println!("link      DOWN — {e}"),
     }
     if pending.is_empty() {

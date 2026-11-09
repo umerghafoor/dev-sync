@@ -157,10 +157,8 @@ pub fn run_supervisor(dir: &Path) -> i32 {
         Err(_) => return finish(127),
     };
     let Some(meta) = read_meta(dir) else { return finish(127) };
-    let env: Vec<(String, String)> = fs::read(dir.join("env.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default();
+    let env: Vec<(String, String)> =
+        fs::read(dir.join("env.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     // jobs/<id> -> .devsync-agent -> project root
     let root = dir.ancestors().nth(3).map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
     let cwd = if meta.cwd.is_empty() { root } else { root.join(&meta.cwd) };
@@ -326,7 +324,8 @@ mod tests {
         let state = d.path();
         let dir = state.join("jobs").join("1-abcd");
         fs::create_dir_all(&dir).unwrap();
-        let meta = Meta { id: "1-abcd".into(), command: "x".into(), cwd: String::new(), started_unix: 1, started_ns: 1 };
+        let meta =
+            Meta { id: "1-abcd".into(), command: "x".into(), cwd: String::new(), started_unix: 1, started_ns: 1 };
         fs::write(dir.join("meta.json"), serde_json::to_vec(&meta).unwrap()).unwrap();
         fs::write(dir.join("output.log"), b"hello world").unwrap();
         fs::write(dir.join("exit_code"), b"3").unwrap();

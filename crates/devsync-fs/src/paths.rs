@@ -45,10 +45,7 @@ pub fn safe_join(root: &Path, rel: &str) -> Result<PathBuf, PathError> {
 /// Converts a path under `root` into the canonical `/`-separated relative form.
 pub fn to_rel(root: &Path, path: &Path) -> Option<String> {
     let rel = path.strip_prefix(root).ok()?;
-    let parts: Vec<String> = rel
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect();
+    let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
     if parts.is_empty() {
         None
     } else {

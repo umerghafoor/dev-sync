@@ -258,7 +258,9 @@ pub fn collect(p: &Project, rep: &dyn Reporter) -> Result<usize> {
         if !j.finished() {
             let n = match poll_session(&mut s, p, j, None) {
                 Ok(n) => n,
-                Err(ClientError::Transport(devsync_transport::TransportError::Remote(m))) if m.contains("no such job") => {
+                Err(ClientError::Transport(devsync_transport::TransportError::Remote(m)))
+                    if m.contains("no such job") =>
+                {
                     j.state = "lost".into();
                     save(p, j)?;
                     0

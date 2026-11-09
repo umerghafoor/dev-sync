@@ -65,11 +65,8 @@ pub fn setup_claude(root: &Path, exe: &Path) -> Result<(), String> {
     let command = format!("{} hook claude", sh_quote(&exe.display().to_string()));
     let obj = settings.as_object_mut().ok_or("settings.json is not a JSON object")?;
     let hooks = obj.entry("hooks").or_insert_with(|| json!({}));
-    let pre = hooks
-        .as_object_mut()
-        .ok_or("\"hooks\" is not an object")?
-        .entry("PreToolUse")
-        .or_insert_with(|| json!([]));
+    let pre =
+        hooks.as_object_mut().ok_or("\"hooks\" is not an object")?.entry("PreToolUse").or_insert_with(|| json!([]));
     let arr = pre.as_array_mut().ok_or("\"hooks.PreToolUse\" is not an array")?;
     // Drop earlier devsync hooks (e.g. from a different install path).
     arr.retain(|m| {
@@ -170,7 +167,8 @@ mod tests {
         fs::write(d.path().join("CLAUDE.md"), "# Project\n\nNotes.\n").unwrap();
         setup_claude(d.path(), Path::new("/usr/local/bin/devsync")).unwrap();
         setup_claude(d.path(), Path::new("/usr/local/bin/devsync")).unwrap();
-        let s: Value = serde_json::from_str(&fs::read_to_string(d.path().join(".claude/settings.json")).unwrap()).unwrap();
+        let s: Value =
+            serde_json::from_str(&fs::read_to_string(d.path().join(".claude/settings.json")).unwrap()).unwrap();
         assert_eq!(s["permissions"]["allow"][0], "Bash(ls *)");
         assert_eq!(s["hooks"]["PreToolUse"].as_array().unwrap().len(), 1);
         let md = fs::read_to_string(d.path().join("CLAUDE.md")).unwrap();
