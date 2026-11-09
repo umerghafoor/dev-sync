@@ -6,7 +6,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { binaryPath, DevsyncEvent, DevsyncNotFound, EventStream, run, runJson, Status } from "./cli";
-import { DevsyncResource, DevsyncScm } from "./scm";
+import { asResource, Model } from "./model";
+import { DevsyncScm } from "./scm";
+import { Sidebar } from "./views";
 
 const CONFIG_FILE = ".devsync.toml";
 
@@ -14,7 +16,9 @@ type SyncState = "idle" | "pending" | "syncing" | "synced" | "offline" | "error"
 
 class Controller implements vscode.Disposable {
   private root?: string;
+  private model?: Model;
   private scm?: DevsyncScm;
+  private sidebar?: Sidebar;
   private readonly status: vscode.StatusBarItem;
   private watch?: EventStream;
   private readonly disposables: vscode.Disposable[] = [];
@@ -33,7 +37,14 @@ class Controller implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
+    this.sidebar = new Sidebar({
+      run: (command, background) =>
+        background ? this.runInBackground(command, this.activeDir()) : this.runInTerminal(command, this.activeDir()),
+      exec: (id) => void vscode.commands.executeCommand(id),
+    });
+    this.disposables.push(this.sidebar);
     this.registerCommands();
+    this.pushRunState();
     const root = await this.findRoot();
     if (root) this.activate(root);
   }
@@ -52,8 +63,14 @@ class Controller implements vscode.Disposable {
     if (this.root === root) return;
     this.root = root;
     void vscode.commands.executeCommand("setContext", "devsync.active", true);
-    this.scm = new DevsyncScm(root, this.log);
-    this.disposables.push(this.scm);
+    this.model = new Model(root, this.log);
+    this.disposables.push(this.model);
+    if (vscode.workspace.getConfiguration("devsync").get<boolean>("sourceControl", true)) {
+      this.scm = new DevsyncScm(root, this.model);
+      this.disposables.push(this.scm);
+    }
+    this.sidebar?.setModel(this.model);
+    this.disposables.push(this.model.onDidChange(() => this.setState(this.state, this.detail)));
     this.status.show();
     this.setState("stopped");
     if (vscode.workspace.getConfiguration("devsync").get<boolean>("autoSync", true)) {
@@ -94,7 +111,7 @@ class Controller implements vscode.Disposable {
       stopped: ["$(debug-pause)", "devsync: paused"],
     };
     const [icon, label] = view[state];
-    const running = this.scm?.runningJobs ?? 0;
+    const running = this.model?.runningJobs ?? 0;
     this.status.text = `${icon} ${label}${running ? ` · $(play) ${running}` : ""}`;
     const tip = new vscode.MarkdownString(undefined, true);
     tip.appendMarkdown(`**devsync** — ${state}\n\n`);
@@ -109,6 +126,49 @@ class Controller implements vscode.Disposable {
           ? new vscode.ThemeColor("statusBarItem.warningBackground")
           : undefined;
     void vscode.commands.executeCommand("setContext", "devsync.watching", !!this.watch?.running);
+    this.pushRunState();
+  }
+
+  /** Remote target from .devsync.toml, for display. */
+  private remoteLabel(): string {
+    if (!this.root) return "";
+    try {
+      const t = fs.readFileSync(path.join(this.root, CONFIG_FILE), "utf8");
+      const host = /^\s*host\s*=\s*"([^"]*)"/m.exec(t)?.[1] ?? "";
+      const dir = /^\s*path\s*=\s*"([^"]*)"/m.exec(t)?.[1] ?? "";
+      return host ? `${host}:${dir}` : "";
+    } catch {
+      return "";
+    }
+  }
+
+  private pushRunState(label?: string): void {
+    const names: Record<SyncState, string> = {
+      idle: "connected",
+      pending: "changes waiting",
+      syncing: "syncing…",
+      synced: "in sync",
+      offline: "offline — changes queued",
+      error: "error",
+      stopped: "auto sync paused",
+    };
+    this.sidebar?.updateRun({
+      active: !!this.root,
+      state: this.state,
+      label: label && label !== "devsync" ? label : names[this.state],
+      detail: this.detail,
+      host: this.remoteLabel(),
+      running: this.model?.runningJobs ?? 0,
+      pending: this.model?.pendingChanges ?? 0,
+      history: this.ctx.workspaceState.get<string[]>("devsync.history", []),
+    });
+  }
+
+  private remember(command: string): void {
+    const h = this.ctx.workspaceState.get<string[]>("devsync.history", []).filter((c) => c !== command);
+    void this.ctx.workspaceState.update("devsync.history", [command, ...h].slice(0, 10));
+    void this.ctx.workspaceState.update("devsync.lastCommand", command);
+    this.pushRunState();
   }
 
   private onEvent(e: DevsyncEvent): void {
@@ -118,7 +178,7 @@ class Controller implements vscode.Disposable {
         break;
       case "changed":
         this.setState("pending", `${e.paths} change(s) waiting to be sent`);
-        this.scm?.scheduleRefresh();
+        this.model?.scheduleRefresh();
         break;
       case "planned":
         if (e.upload > 0 || e.delete > 0) this.setState("syncing", `${e.upload} to upload, ${e.delete} to delete`);
@@ -128,31 +188,31 @@ class Controller implements vscode.Disposable {
         this.restartDelay = 2000;
         this.setState("synced", `sent ${e.files} file(s)`);
         this.log.appendLine(`synced ${e.files} file(s), ${e.bytes} bytes, ${e.deleted} deleted in ${e.millis} ms`);
-        this.scm?.scheduleRefresh(0);
+        this.model?.scheduleRefresh(0);
         break;
       case "up_to_date":
         this.lastSync = new Date();
         this.setState("synced", "remote is up to date");
-        this.scm?.scheduleRefresh(0);
+        this.model?.scheduleRefresh(0);
         break;
       case "retrying":
       case "offline":
         this.setState("offline", e.error);
-        this.scm?.scheduleRefresh();
+        this.model?.scheduleRefresh();
         break;
       case "pulled":
         this.log.appendLine(`pulled back ${e.path}`);
-        this.scm?.scheduleRefresh();
+        this.model?.scheduleRefresh();
         break;
       case "conflict":
         void this.showConflict(e.path, e.saved_as);
-        this.scm?.scheduleRefresh(0);
+        this.model?.scheduleRefresh(0);
         break;
       case "job_updated":
-        this.scm?.scheduleRefresh();
+        this.model?.scheduleRefresh();
         break;
       case "job_finished":
-        this.scm?.scheduleRefresh(0);
+        this.model?.scheduleRefresh(0);
         void this.notifyFinished(e.id, e.state, e.exit_code);
         break;
       case "warning":
@@ -247,21 +307,21 @@ class Controller implements vscode.Disposable {
   }
 
   private runInTerminal(command: string, cwd: string): void {
-    void this.ctx.workspaceState.update("devsync.lastCommand", command);
+    this.remember(command);
     void this.ctx.workspaceState.update("devsync.lastCwd", cwd);
     const short = command.length > 40 ? `${command.slice(0, 37)}…` : command;
     this.terminal(`devsync: ${short}`, ["exec", "--", command], cwd);
-    this.scm?.scheduleRefresh(1500);
+    this.model?.scheduleRefresh(1500);
   }
 
   private async runInBackground(command: string, cwd: string): Promise<void> {
-    void this.ctx.workspaceState.update("devsync.lastCommand", command);
+    this.remember(command);
     const r = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.SourceControl, title: "Starting remote job" },
       () => runJson<{ id: string; output: string }>(cwd, ["submit", "--", command], 600_000),
     );
     this.notifyJobs.add(r.id);
-    this.scm?.scheduleRefresh(0);
+    this.model?.scheduleRefresh(0);
     if (vscode.workspace.getConfiguration("devsync").get<boolean>("openOutputOnBackgroundRun", true)) {
       this.openOutput(r.id);
     }
@@ -310,7 +370,8 @@ class Controller implements vscode.Disposable {
         this.watch?.running
           ? { label: "$(debug-pause) Pause auto sync", cmd: "devsync.stopWatch" }
           : { label: "$(sync) Resume auto sync", cmd: "devsync.startWatch" },
-        { label: "$(source-control) Show devsync panel", cmd: "devsync.showPanel" },
+        { label: "$(remote-explorer) Show devsync sidebar", cmd: "devsync.focusRun" },
+        { label: "$(source-control) Show in Source Control", cmd: "devsync.showPanel" },
         { label: "More", kind: vscode.QuickPickItemKind.Separator },
         { label: "$(plug) Forward ports", cmd: "devsync.forward" },
         { label: "$(info) Status", cmd: "devsync.status" },
@@ -380,13 +441,13 @@ class Controller implements vscode.Disposable {
           this.setState(this.watch?.running ? "synced" : "stopped", r.stderr.trim().split("\n").pop() ?? "");
         },
       );
-      this.scm?.scheduleRefresh(0);
+      this.model?.scheduleRefresh(0);
     });
 
     reg("devsync.startWatch", () => this.startWatch());
     reg("devsync.stopWatch", () => this.stopWatch());
     reg("devsync.toggleWatch", () => (this.watch?.running ? this.stopWatch() : this.startWatch()));
-    reg("devsync.refresh", () => this.scm?.refresh());
+    reg("devsync.refresh", () => this.model?.refresh());
     reg("devsync.showPanel", () => vscode.commands.executeCommand("workbench.view.scm"));
     reg("devsync.walkthrough", () =>
       vscode.commands.executeCommand(
@@ -441,22 +502,28 @@ class Controller implements vscode.Disposable {
 
     reg("devsync.collect", async () => {
       await run(this.requireRoot(), ["--quiet", "collect"], 120_000);
-      await this.scm?.refresh();
+      await this.model?.refresh();
     });
 
     // Resource actions (from the Source Control view).
-    reg("devsync.openJob", (r?: DevsyncResource) => r?.job && this.openOutput(r.job.id));
-    reg("devsync.killJob", async (r?: DevsyncResource) => {
+    reg("devsync.openJob", (a?: unknown) => {
+      const r = asResource(a);
+      if (r?.job) this.openOutput(r.job.id);
+    });
+    reg("devsync.killJob", async (a?: unknown) => {
+      const r = asResource(a);
       if (!r?.job) return;
       await run(this.requireRoot(), ["kill", r.job.id]);
-      this.scm?.scheduleRefresh(0);
+      this.model?.scheduleRefresh(0);
     });
-    reg("devsync.rerunJob", (r?: DevsyncResource) => {
+    reg("devsync.rerunJob", (a?: unknown) => {
+      const r = asResource(a);
       if (!r?.job) return;
       const root = this.requireRoot();
       this.runInTerminal(r.job.command, r.job.cwd ? path.join(root, r.job.cwd) : root);
     });
-    reg("devsync.compareConflict", async (r?: DevsyncResource) => {
+    reg("devsync.compareConflict", async (a?: unknown) => {
+      const r = asResource(a);
       if (!r?.remoteCopy) return;
       const rel = path.relative(this.requireRoot(), r.file);
       await vscode.commands.executeCommand(
@@ -466,9 +533,22 @@ class Controller implements vscode.Disposable {
         `${rel} (yours ↔ remote)`,
       );
     });
-    reg("devsync.acceptRemote", async (r?: DevsyncResource) => r && this.scm?.acceptRemote(r));
-    reg("devsync.keepLocal", async (r?: DevsyncResource) => r && this.scm?.keepLocal(r));
-    reg("devsync.openFile", (r?: DevsyncResource) => r && vscode.window.showTextDocument(vscode.Uri.file(r.file)));
+    reg("devsync.acceptRemote", async (a?: unknown) => {
+      const r = asResource(a);
+      if (r) await this.model?.acceptRemote(r);
+    });
+    reg("devsync.keepLocal", async (a?: unknown) => {
+      const r = asResource(a);
+      if (r) await this.model?.keepLocal(r);
+    });
+    reg("devsync.openFile", async (a?: unknown) => {
+      const r = asResource(a);
+      if (r) await vscode.window.showTextDocument(vscode.Uri.file(r.file));
+    });
+    reg("devsync.focusRun", async () => {
+      await vscode.commands.executeCommand("devsync.run.focus");
+      this.sidebar?.focusInput();
+    });
 
     this.disposables.push(
       vscode.window.registerTerminalProfileProvider("devsync.remoteShell", {
@@ -482,7 +562,7 @@ class Controller implements vscode.Disposable {
           }),
       }),
       vscode.window.onDidCloseTerminal((t) => {
-        if (t.name.startsWith("devsync:")) this.scm?.scheduleRefresh(0);
+        if (t.name.startsWith("devsync:")) this.model?.scheduleRefresh(0);
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("devsync.binaryPath") && this.watch?.running) {

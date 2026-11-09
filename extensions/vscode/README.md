@@ -15,6 +15,10 @@ Source Control view. Built for connections that drop.
     with **Compare**, **Keep yours** and **Accept remote** buttons;
   - **Remote jobs**: recent commands marked ✓ / ✗ / … (running). Click a job
     to see its output; use the buttons to stop it or run it again.
+- **Its own icon in the Activity Bar** (left bar): a sidebar with a big
+  **Run** box (command field, ▶ Run on Remote, Run in Background, Terminal,
+  recent commands, connection status) and the same lists. The icon shows a
+  count badge. **⌘⌥D / Ctrl+Alt+D** jumps there.
 - **Auto sync.** Every save is sent to the remote. While offline, changes
   are queued and sent when the connection returns.
 - **Status bar.** ✓ synced · ⟳ syncing · ☁ offline · ⏸ paused, plus the
@@ -43,7 +47,7 @@ Nothing needs to be installed on the remote machine.
 
 | I want to… | Do this |
 | --- | --- |
-| Run tests / a script on the remote | Source Control → devsync box → type the command → ⌘Enter |
+| Run tests / a script on the remote | devsync icon in the left bar → type in **Run** → Enter (or Source Control → devsync box → ⌘Enter) |
 | Run the same thing again | ⌘⌥R / Ctrl+Alt+R, or ▶ in the editor title bar |
 | Start a long job (training, server) | devsync panel ⋯ → **Run on Remote in Background** |
 | See a job's output | Click it under **Remote jobs** |
@@ -72,6 +76,7 @@ syntax).
 | --- | --- | --- |
 | `devsync.binaryPath` | `""` | Path to `devsync`. Empty: search `PATH`, `~/.local/bin` and `~/.cargo/bin` |
 | `devsync.autoSync` | `true` | Send every save automatically when a devsync project opens |
+| `devsync.sourceControl` | `true` | Also show devsync in the Source Control view (the Activity Bar sidebar is always there) |
 | `devsync.openOutputOnBackgroundRun` | `true` | Open a background job's output when it starts |
 
 Project options (remote host, excludes, environment, ports) live in

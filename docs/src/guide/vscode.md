@@ -39,6 +39,27 @@ Open **Source Control** (⌃⇧G). The devsync section has:
 terminal · refresh. Under **⋯**: run in background, run again, collect
 results, forward ports, status, doctor, Claude Code setup, Getting Started.
 
+## The devsync sidebar (Activity Bar)
+
+The extension also adds a **devsync icon to the Activity Bar** (the left bar,
+under Explorer, Search, Source Control…). Its sidebar has the same lists plus
+a bigger **Run** box:
+
+| Section | What it's for |
+| --- | --- |
+| **Run** | Status dot and remote address, a command field, a full-width **▶ Run on Remote** button, **Run in Background** and **Terminal**, and your **Recent** commands (click to edit, ▶ to run again). Enter runs; ⌘Enter runs in the background; Shift+Enter adds a line |
+| **Not on Remote Yet** | Same A/M/D list as in Source Control, with Push and Pause/Resume buttons |
+| **Conflicts** | Appears only when there are conflicts |
+| **Remote Jobs** | ✓ / ✗ / spinner for each job; click for output; ■ stop, ↻ run again |
+
+The icon shows a **count badge**: changes not yet on the remote, plus
+conflicts. **⌘⌥D / Ctrl+Alt+D** opens the sidebar with the cursor in the Run
+field.
+
+You can drag the icon to reorder it, or drag the devsync sections into the
+Secondary Side Bar. If you only want the sidebar, set
+`devsync.sourceControl` to `false` to hide devsync from the Source Control view.
+
 ## Status bar
 
 | Shows | Meaning |
@@ -69,6 +90,7 @@ Click it for a menu with every action.
 | --- | --- | --- |
 | `devsync.binaryPath` | `""` | Path to `devsync`. Empty: searches `PATH`, `~/.local/bin`, `~/.cargo/bin`, `/usr/local/bin`, `/opt/homebrew/bin` |
 | `devsync.autoSync` | `true` | Send every save automatically when a devsync project opens |
+| `devsync.sourceControl` | `true` | Also show devsync in the Source Control view (the Activity Bar sidebar is always there) |
 | `devsync.openOutputOnBackgroundRun` | `true` | Open a background job's output when it starts |
 
 The extension activates in any workspace containing a `.devsync.toml`. Logs

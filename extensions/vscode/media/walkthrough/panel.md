@@ -1,7 +1,12 @@
 # The devsync panel
 
-Open **Source Control** (⌃⇧G / Ctrl+Shift+G). Next to Git you'll find
-**devsync**:
+**In the left bar:** click the **devsync icon** (two arrows), or press
+⌘⌥D / Ctrl+Alt+D. The sidebar has a **Run** box at the top (type a command,
+press Enter), your recent commands, and the lists below. The icon shows how
+many changes haven't been sent yet.
+
+**In Source Control** (⌃⇧G / Ctrl+Shift+G), next to Git, you'll find the
+same thing as a **devsync** section:
 
 | Part | What it shows |
 | --- | --- |

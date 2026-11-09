@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ✓/✗ status, stop and run-again actions.
 - VS Code: Getting Started walkthrough, run/re-run in the editor title bar,
   ⌘⌥R / Ctrl+Alt+R to re-run, extension icon.
+- VS Code: devsync icon in the Activity Bar with a sidebar: a Run box
+  (command field, Run / Run in Background / Terminal buttons, status, recent
+  commands), "Not on Remote Yet", Conflicts and Remote Jobs, plus a count
+  badge on the icon; ⌘⌥D / Ctrl+Alt+D focuses it; `devsync.sourceControl`
+  setting.
 - `devsync changes`: git-status-like list of local changes not yet on the
   remote (`--json` supported).
 - Project logo.
