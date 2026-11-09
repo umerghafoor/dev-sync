@@ -54,7 +54,7 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - run: make dist CLIENT_TARGET=${{ matrix.target }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.target }}
           path: dist/*.tar.gz
@@ -69,7 +69,7 @@ jobs:
         with:
           node-version: 20
       - run: make vscode
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vsix
           path: extensions/vscode/*.vsix
