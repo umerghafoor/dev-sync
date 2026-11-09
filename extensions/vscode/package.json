@@ -56,6 +56,12 @@
         "icon": "$(run-all)"
       },
       {
+        "command": "devsync.pull",
+        "title": "Pull from Remote",
+        "category": "devsync",
+        "icon": "$(repo-pull)"
+      },
+      {
         "command": "devsync.push",
         "title": "Push Now",
         "category": "devsync",
@@ -202,6 +208,11 @@
           "command": "devsync.scmRun",
           "when": "scmProvider == devsync",
           "group": "navigation@1"
+        },
+        {
+          "command": "devsync.pull",
+          "when": "scmProvider == devsync",
+          "group": "navigation@1.5"
         },
         {
           "command": "devsync.push",
@@ -406,6 +417,16 @@
         }
       ],
       "view/title": [
+        {
+          "command": "devsync.pull",
+          "when": "view == devsync.run",
+          "group": "navigation@0"
+        },
+        {
+          "command": "devsync.pull",
+          "when": "view == devsync.changes",
+          "group": "navigation@0"
+        },
         {
           "command": "devsync.push",
           "when": "view == devsync.changes",

@@ -18,7 +18,7 @@ current directory and its parents.
 | [`jobs`](#devsync-jobs) | List jobs |
 | [`kill`](#devsync-kill) | Stop a running job (default: the latest) |
 | [`collect`](#devsync-collect) | Fetch output of running jobs into .devsync/jobs/ once, then exit |
-| [`pull`](#devsync-pull) | Copy a file or directory from the remote project |
+| [`pull`](#devsync-pull) | Get code from the remote: the whole project (safe) or a given path |
 | [`status`](#devsync-status) | Configuration, connectivity and pending changes |
 | [`changes`](#devsync-changes) | Local changes not yet on the remote, like `git status` (no network) |
 | [`doctor`](#devsync-doctor) | Check the whole setup end to end and explain problems |
@@ -44,7 +44,7 @@ Commands:
   jobs         List jobs
   kill         Stop a running job (default: the latest)
   collect      Fetch output of running jobs into .devsync/jobs/ once, then exit
-  pull         Copy a file or directory from the remote project
+  pull         Get code from the remote: the whole project (safe) or a given path
   status       Configuration, connectivity and pending changes
   changes      Local changes not yet on the remote, like `git status` (no network)
   doctor       Check the whole setup end to end and explain problems
@@ -226,20 +226,39 @@ Options:
 ## devsync pull
 
 ```text
-Copy a file or directory from the remote project
+Get code from the remote: the whole project (safe) or a given path.
 
-Usage: devsync pull [OPTIONS] <PATH> [DEST]
+Without a path: bring the remote's changes into this project. Files only on the remote, or that you haven't edited since the last sync, are updated; files you edited keep your version and the remote one is saved as <file>.devsync-remote. Sync excludes apply.
+
+With a path: copy that remote file or directory exactly (overwriting local copies; excludes don't apply).
+
+Usage: devsync pull [OPTIONS] [PATH] [DEST]
 
 Arguments:
-  <PATH>  Path relative to the remote project root
-  [DEST]  Local directory to place it under (default: project root)
+  [PATH]
+          Path relative to the remote project root (omit to pull the whole project safely)
+
+  [DEST]
+          Local directory to place it under (default: project root; only with a path)
 
 Options:
-  -C, --dir <DIR>  Run as if started in this directory
-      --json       Machine-readable output (NDJSON events / JSON results)
-  -v, --verbose    Show every file transferred and connection details
-  -q, --quiet      Only errors and warnings
-  -h, --help       Print help
+  -C, --dir <DIR>
+          Run as if started in this directory
+
+  -n, --dry-run
+          Show what would change without downloading
+
+      --json
+          Machine-readable output (NDJSON events / JSON results)
+
+  -v, --verbose
+          Show every file transferred and connection details
+
+  -q, --quiet
+          Only errors and warnings
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
 ## devsync status

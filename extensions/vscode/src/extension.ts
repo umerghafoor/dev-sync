@@ -366,6 +366,7 @@ class Controller implements vscode.Disposable {
         { label: "$(run-all) Run in background…", cmd: "devsync.runBackground" },
         { label: "$(terminal) Open remote terminal", cmd: "devsync.shell" },
         { label: "Sync", kind: vscode.QuickPickItemKind.Separator },
+        { label: "$(repo-pull) Pull from remote", cmd: "devsync.pull" },
         { label: "$(cloud-upload) Push now", cmd: "devsync.push" },
         this.watch?.running
           ? { label: "$(debug-pause) Pause auto sync", cmd: "devsync.stopWatch" }
@@ -442,6 +443,32 @@ class Controller implements vscode.Disposable {
         },
       );
       this.model?.scheduleRefresh(0);
+    });
+
+    reg("devsync.pull", async () => {
+      const root = this.requireRoot();
+      const r = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "devsync: pulling from remote…" },
+        () =>
+          runJson<{ updated: string[]; conflicts: { path: string; saved_as: string }[] }>(root, ["pull"], 600_000),
+      );
+      this.model?.scheduleRefresh(0);
+      if (r.updated.length === 0 && r.conflicts.length === 0) {
+        void vscode.window.showInformationMessage("Already up to date with the remote.");
+        return;
+      }
+      const msg = `Pulled ${r.updated.length} file(s) from the remote.${
+        r.conflicts.length
+          ? ` ${r.conflicts.length} file(s) you edited were kept; the remote versions are listed under Conflicts.`
+          : ""
+      }`;
+      if (r.conflicts.length) {
+        if (await vscode.window.showWarningMessage(msg, "Show Conflicts")) {
+          await vscode.commands.executeCommand("devsync.conflicts.focus");
+        }
+      } else {
+        void vscode.window.showInformationMessage(msg);
+      }
     });
 
     reg("devsync.startWatch", () => this.startWatch());

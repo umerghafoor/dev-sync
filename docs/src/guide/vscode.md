@@ -35,7 +35,7 @@ Open **Source Control** (⌃⇧G). The devsync section has:
 | **Conflicts** | A remote command changed a file you also edited. Your file is kept; the remote version is next to it. Buttons: **⇄ Compare**, **↩ Keep yours**, **✓ Accept remote** |
 | **Remote jobs** | The last 20 commands, marked **✓** (exit 0), **✗** (failed), **…** (running), **?** (lost). Click to open the output; **■** stops a running job, **↻** runs it again |
 
-**Toolbar:** ▶ run · ☁ push now · ⏸ pause / ⟳ resume auto sync ·
+**Toolbar:** ▶ run · ⬇ pull from remote · ☁ push now · ⏸ pause / ⟳ resume auto sync ·
 terminal · refresh. Under **⋯**: run in background, run again, collect
 results, forward ports, status, doctor, Claude Code setup, Getting Started.
 
@@ -48,7 +48,7 @@ a bigger **Run** box:
 | Section | What it's for |
 | --- | --- |
 | **Run** | Status dot and remote address, a command field, a full-width **▶ Run on Remote** button, **Run in Background** and **Terminal**, and your **Recent** commands (click to edit, ▶ to run again). Enter runs; ⌘Enter runs in the background; Shift+Enter adds a line |
-| **Not on Remote Yet** | Same A/M/D list as in Source Control, with Push and Pause/Resume buttons |
+| **Not on Remote Yet** | Same A/M/D list as in Source Control, with Pull, Push and Pause/Resume buttons |
 | **Conflicts** | Appears only when there are conflicts |
 | **Remote Jobs** | ✓ / ✗ / spinner for each job; click for output; ■ stop, ↻ run again |
 

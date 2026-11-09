@@ -367,3 +367,36 @@ fn initial_pull_protects_remote_from_deletion_and_can_be_disabled() {
     ok(&devsync(&env.local, &["push"]));
     assert!(!env.local.join("remote-only.txt").exists());
 }
+
+#[test]
+fn pull_brings_remote_changes_without_losing_local_edits() {
+    let env = setup();
+    write(&env.local.join("a.txt"), "a1");
+    write(&env.local.join("b.txt"), "b1");
+    ok(&devsync(&env.local, &["push"]));
+
+    // Someone changes things on the remote…
+    write(&env.remote.join("a.txt"), "a2 from remote");
+    write(&env.remote.join("b.txt"), "b2 from remote");
+    write(&env.remote.join("new/file.txt"), "new on remote");
+    write(&env.remote.join("node_modules/x/i.js"), "dep");
+    // …while b.txt is also edited locally.
+    write(&env.local.join("b.txt"), "b-local-edit");
+
+    let preview = devsync(&env.local, &["pull", "--dry-run"]);
+    ok(&preview);
+    assert!(String::from_utf8_lossy(&preview.stderr).contains("would update 2 file(s)"));
+    assert!(!env.local.join("new/file.txt").exists(), "dry run changes nothing");
+
+    let o = devsync(&env.local, &["pull"]);
+    ok(&o);
+    assert_eq!(fs::read_to_string(env.local.join("a.txt")).unwrap(), "a2 from remote", "untouched file updated");
+    assert_eq!(fs::read_to_string(env.local.join("new/file.txt")).unwrap(), "new on remote");
+    assert_eq!(fs::read_to_string(env.local.join("b.txt")).unwrap(), "b-local-edit", "local edit kept");
+    assert_eq!(fs::read_to_string(env.local.join("b.txt.devsync-remote")).unwrap(), "b2 from remote");
+    assert!(!env.local.join("node_modules").exists(), "excluded paths are not pulled");
+
+    // Pulled files count as synced; only the local edit is left to push.
+    let changes = ok(&devsync(&env.local, &["changes"]));
+    assert_eq!(changes.trim(), "M b.txt", "{changes}");
+}

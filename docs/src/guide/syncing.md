@@ -43,7 +43,9 @@ only, set `sync.initial_pull = false` before the first sync.
 devsync push --dry-run
 ```
 
-This shows what the first sync would download.
+This shows what the first sync would download. To bring remote changes
+down at any later time, run `devsync pull` (see
+[Pulling code from the remote](ports-and-shells.md#pulling-code-from-the-remote)).
 
 ## What is synced
 

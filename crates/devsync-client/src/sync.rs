@@ -198,57 +198,93 @@ fn read_full(f: &mut fs::File, buf: &mut [u8]) -> std::io::Result<usize> {
     Ok(n)
 }
 
-/// First sync from this machine: bring down what only the remote has, so
-/// connecting a new or empty folder to an existing remote project starts
-/// from the remote's code instead of overwriting or deleting it. Files that
-/// differ on both sides keep the local version; the remote one is saved as
-/// `<file>.devsync-remote`. Returns the number of files written.
-fn initial_pull(
+/// What a pull would do (or did).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct PullStats {
+    /// Written to their own path (new on the remote, or changed only there).
+    pub updated: Vec<String>,
+    /// Edited locally and changed remotely: local kept, remote saved alongside.
+    pub conflicts: Vec<(String, String)>,
+}
+
+/// Brings remote changes into the local tree without losing local work:
+/// - missing locally, or locally unchanged since the last sync → take the remote file;
+/// - edited locally (differs from the last-synced version) → keep it and save
+///   the remote version as `<file>.devsync-remote`.
+///
+/// With no sync history (first sync), every differing local file counts as
+/// edited, so nothing local is ever overwritten.
+#[allow(clippy::too_many_arguments)] // private helper shared by push and pull
+fn pull_remote(
     s: &mut Session,
     p: &Project,
     rep: &dyn Reporter,
     local: &[Entry],
     remote: &[Entry],
+    snap: &mut Snapshot,
     dry_run: bool,
-) -> Result<usize> {
+    what: &str,
+) -> Result<PullStats> {
     let local_map: HashMap<&str, &Entry> = local.iter().map(|e| (e.path.as_str(), e)).collect();
-    let mut only_remote = Vec::new();
-    let mut differ = Vec::new();
+    let mut take = Vec::new();
+    let mut keep_both = Vec::new();
     for e in remote {
         match local_map.get(e.path.as_str()) {
-            None => only_remote.push(e),
-            Some(l) if !devsync_fs::diff::same(l, e) => differ.push(e),
-            Some(_) => {}
+            Some(l) if devsync_fs::diff::same(l, e) => snap.set(&e.path, e.hash),
+            Some(l) if snap.get(&e.path) != Some(&l.hash) => keep_both.push(e),
+            _ => take.push(e),
         }
     }
-    if only_remote.is_empty() && differ.is_empty() {
-        return Ok(0);
+    let mut stats = PullStats::default();
+    if take.is_empty() && keep_both.is_empty() {
+        return Ok(stats);
     }
-    let both = if differ.is_empty() {
+    let both = if keep_both.is_empty() {
         String::new()
     } else {
-        format!(", and keeping {} local file(s) that differ (remote versions saved as *.devsync-remote)", differ.len())
+        format!("; {} file(s) you edited locally are kept (remote versions saved as *.devsync-remote)", keep_both.len())
     };
     rep.event(Event::Info {
-        message: format!(
-            "first sync with this remote: {} {} file(s) that exist only there{both}",
-            if dry_run { "would download" } else { "downloading" },
-            only_remote.len()
-        ),
+        message: format!("{what}: {} {} file(s){both}", if dry_run { "would update" } else { "updating" }, take.len()),
     });
-    if dry_run {
-        return Ok(0);
-    }
-    for e in &only_remote {
-        download(s, &p.root, e, &p.root.join(&e.path))?;
+    for e in &take {
+        if !dry_run {
+            download(s, &p.root, e, &p.root.join(&e.path))?;
+            snap.set(&e.path, e.hash);
+        }
         rep.event(Event::Pulled { path: e.path.clone() });
+        stats.updated.push(e.path.clone());
     }
-    for e in &differ {
+    for e in &keep_both {
         let alt = format!("{}.devsync-remote", e.path);
-        download(s, &p.root, e, &p.root.join(&alt))?;
-        rep.event(Event::Conflict { path: e.path.clone(), saved_as: alt });
+        if !dry_run {
+            download(s, &p.root, e, &p.root.join(&alt))?;
+        }
+        rep.event(Event::Conflict { path: e.path.clone(), saved_as: alt.clone() });
+        stats.conflicts.push((e.path.clone(), alt));
     }
-    Ok(only_remote.len() + differ.len())
+    Ok(stats)
+}
+
+/// `devsync pull` without a path: bring the whole project's remote changes
+/// down safely (sync excludes apply; local edits are never overwritten).
+pub fn pull_project(p: &Project, rep: &dyn Reporter, dry_run: bool) -> Result<PullStats> {
+    p.with_retry(rep, || {
+        let local = local_manifest(p)?;
+        rep.event(Event::Connecting { host: p.host_label() });
+        let mut s = p.connect()?;
+        let remote = match s.call(&Request::Manifest { ignore: p.ignore_spec() })? {
+            Response::Manifest(m) => m,
+            other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
+        };
+        let mut snap = Snapshot::load(p);
+        let stats = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, dry_run, "pulling from remote")?;
+        s.close();
+        if !dry_run {
+            snap.save();
+        }
+        Ok(stats)
+    })
 }
 
 fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushStats> {
@@ -260,9 +296,13 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
         Response::Manifest(m) => m,
         other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
     };
-    if p.config.sync.initial_pull && !remote.is_empty() && !Snapshot::load(p).existed() {
-        let pulled = initial_pull(&mut s, p, rep, &local, &remote, opts.dry_run)?;
-        if pulled > 0 {
+    // First sync from this machine: start from the remote's code, so an empty
+    // or new folder never overwrites (or, with delete on, wipes) the project.
+    let mut snap = Snapshot::load(p);
+    if p.config.sync.initial_pull && !remote.is_empty() && !snap.existed() {
+        let pulled =
+            pull_remote(&mut s, p, rep, &local, &remote, &mut snap, opts.dry_run, "first sync with this remote")?;
+        if !opts.dry_run && !(pulled.updated.is_empty() && pulled.conflicts.is_empty()) {
             local = local_manifest(p)?;
         }
     }

@@ -96,12 +96,23 @@ pub enum Cmd {
     Kill { id: Option<String> },
     /// Fetch output of running jobs into .devsync/jobs/ once, then exit.
     Collect,
-    /// Copy a file or directory from the remote project.
+    /// Get code from the remote: the whole project (safe) or a given path.
+    ///
+    /// Without a path: bring the remote's changes into this project. Files only
+    /// on the remote, or that you haven't edited since the last sync, are
+    /// updated; files you edited keep your version and the remote one is saved
+    /// as <file>.devsync-remote. Sync excludes apply.
+    ///
+    /// With a path: copy that remote file or directory exactly (overwriting
+    /// local copies; excludes don't apply).
     Pull {
-        /// Path relative to the remote project root.
-        path: String,
-        /// Local directory to place it under (default: project root).
+        /// Path relative to the remote project root (omit to pull the whole project safely).
+        path: Option<String>,
+        /// Local directory to place it under (default: project root; only with a path).
         dest: Option<PathBuf>,
+        /// Show what would change without downloading.
+        #[arg(short = 'n', long)]
+        dry_run: bool,
     },
     /// Configuration, connectivity and pending changes.
     Status,

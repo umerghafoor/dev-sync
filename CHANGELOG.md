@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (differing files are kept locally; the remote copy is saved as
   `<file>.devsync-remote`), so an empty folder can be connected to an existing
   remote project. Disable with `sync.initial_pull = false`.
+- `devsync pull` without a path pulls the whole project safely: remote-only
+  and locally untouched files are updated, files you edited keep your version
+  (the remote one is saved as `<file>.devsync-remote`), sync excludes apply;
+  `--dry-run` previews. VS Code: **Pull from Remote** button.
 - `devsync changes`: git-status-like list of local changes not yet on the
   remote (`--json` supported).
 - Project logo.

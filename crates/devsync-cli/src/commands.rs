@@ -67,7 +67,7 @@ pub fn run(cli: Cli) -> i32 {
         Cmd::Jobs { remote } => list_jobs(&g, remote),
         Cmd::Kill { id } => kill(&g, id.as_deref()),
         Cmd::Collect => collect(&g),
-        Cmd::Pull { path, dest } => pull(&g, &path, dest.as_deref()),
+        Cmd::Pull { path, dest, dry_run } => pull(&g, path.as_deref(), dest.as_deref(), dry_run),
         Cmd::Status => status(&g),
         Cmd::Changes => changes(&g),
         Cmd::Doctor => doctor(&g),
@@ -209,9 +209,36 @@ fn push(g: &Global, dry_run: bool, force: bool) -> Result<i32> {
     Ok(0)
 }
 
-fn pull(g: &Global, path: &str, dest: Option<&Path>) -> Result<i32> {
+fn pull(g: &Global, path: Option<&str>, dest: Option<&Path>, dry_run: bool) -> Result<i32> {
     let p = project()?;
     let rep = reporter(g, false, false);
+    let Some(path) = path else {
+        if dest.is_some() {
+            bail!("a destination needs a path: devsync pull <path> <dest>");
+        }
+        let stats = sync::pull_project(&p, rep.as_ref(), dry_run)?;
+        if g.json {
+            print_json(json!({"event": "pull_done", "updated": stats.updated,
+                "conflicts": stats.conflicts.iter().map(|(a, b)| json!({"path": a, "saved_as": b})).collect::<Vec<_>>(),
+                "dry_run": dry_run}));
+        } else if stats.updated.is_empty() && stats.conflicts.is_empty() {
+            human(g).ok("already up to date with the remote");
+        } else if !dry_run {
+            human(g).ok(&format!(
+                "pulled {} file(s){}",
+                stats.updated.len(),
+                if stats.conflicts.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {} conflict(s) saved as *.devsync-remote", stats.conflicts.len())
+                }
+            ));
+        }
+        return Ok(0);
+    };
+    if dry_run {
+        bail!("--dry-run is only supported without a path");
+    }
     let files = sync::pull(&p, rep.as_ref(), path, dest)?;
     if !g.json {
         human(g).ok(&format!("pulled {} file(s)", files.len()));
