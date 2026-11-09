@@ -152,7 +152,8 @@ class RunView implements vscode.WebviewViewProvider {
       <button class="secondary" data-exec="devsync.shell" title="Interactive shell on the remote">Terminal</button>
     </div>
     <div class="row">
-      <button class="secondary" data-exec="devsync.pull" title="Get the remote's changes; files you edited are never overwritten">⬇ Pull from Remote</button>
+      <button class="secondary" data-exec="devsync.pull" title="Get all of the remote's changes; files you edited are never overwritten">⬇ Pull All</button>
+      <button class="secondary" data-exec="devsync.pullPick" title="Choose remote files or folders to pull">Pull Files…</button>
       <button class="secondary" data-exec="devsync.push" title="Send local changes now">⬆ Push</button>
     </div>
     <div class="hint">Runs in the remote folder of the file you have open. Enter: run · ${mod}Enter: background · Shift+Enter: new line</div>

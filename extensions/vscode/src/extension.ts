@@ -342,6 +342,38 @@ class Controller implements vscode.Disposable {
     });
   }
 
+  /** Pulls the whole project ([]) or the given project-relative paths. */
+  private async pullPaths(rels: string[]): Promise<void> {
+    const root = this.requireRoot();
+    const what = rels.length === 0 ? "project" : rels.length === 1 ? rels[0] : `${rels.length} items`;
+    const r = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `devsync: pulling ${what} from remote…` },
+      () =>
+        runJson<{ updated: string[]; conflicts: { path: string; saved_as: string }[] }>(
+          root,
+          ["pull", "--", ...rels],
+          600_000,
+        ),
+    );
+    this.model?.scheduleRefresh(0);
+    if (r.updated.length === 0 && r.conflicts.length === 0) {
+      void vscode.window.showInformationMessage(`Already up to date with the remote (${what}).`);
+      return;
+    }
+    const msg = `Pulled ${r.updated.length} file(s) from the remote.${
+      r.conflicts.length
+        ? ` ${r.conflicts.length} file(s) you edited were kept; the remote versions are listed under Conflicts.`
+        : ""
+    }`;
+    if (r.conflicts.length) {
+      if (await vscode.window.showWarningMessage(msg, "Show Conflicts")) {
+        await vscode.commands.executeCommand("devsync.conflicts.focus");
+      }
+    } else {
+      void vscode.window.showInformationMessage(msg);
+    }
+  }
+
   // ------------------------------------------------------------ commands
 
   private registerCommands(): void {
@@ -366,7 +398,8 @@ class Controller implements vscode.Disposable {
         { label: "$(run-all) Run in background…", cmd: "devsync.runBackground" },
         { label: "$(terminal) Open remote terminal", cmd: "devsync.shell" },
         { label: "Sync", kind: vscode.QuickPickItemKind.Separator },
-        { label: "$(repo-pull) Pull from remote", cmd: "devsync.pull" },
+        { label: "$(repo-pull) Pull everything from remote", cmd: "devsync.pull" },
+        { label: "$(cloud-download) Pull files from remote…", cmd: "devsync.pullPick" },
         { label: "$(cloud-upload) Push now", cmd: "devsync.push" },
         this.watch?.running
           ? { label: "$(debug-pause) Pause auto sync", cmd: "devsync.stopWatch" }
@@ -445,30 +478,100 @@ class Controller implements vscode.Disposable {
       this.model?.scheduleRefresh(0);
     });
 
-    reg("devsync.pull", async () => {
+    reg("devsync.pull", () => this.pullPaths([]));
+
+    // Explorer / editor-tab context menu: one item or a multi-selection.
+    reg("devsync.pullPaths", async (uri?: vscode.Uri, uris?: vscode.Uri[]) => {
       const root = this.requireRoot();
-      const r = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: "devsync: pulling from remote…" },
-        () =>
-          runJson<{ updated: string[]; conflicts: { path: string; saved_as: string }[] }>(root, ["pull"], 600_000),
-      );
-      this.model?.scheduleRefresh(0);
-      if (r.updated.length === 0 && r.conflicts.length === 0) {
-        void vscode.window.showInformationMessage("Already up to date with the remote.");
+      const picked = (uris && uris.length ? uris : uri ? [uri] : []).filter((u) => u.scheme === "file");
+      if (!picked.length) {
+        await vscode.commands.executeCommand("devsync.pullPick");
         return;
       }
-      const msg = `Pulled ${r.updated.length} file(s) from the remote.${
-        r.conflicts.length
-          ? ` ${r.conflicts.length} file(s) you edited were kept; the remote versions are listed under Conflicts.`
-          : ""
-      }`;
-      if (r.conflicts.length) {
-        if (await vscode.window.showWarningMessage(msg, "Show Conflicts")) {
-          await vscode.commands.executeCommand("devsync.conflicts.focus");
-        }
-      } else {
-        void vscode.window.showInformationMessage(msg);
+      const rels = picked.map((u) => path.relative(root, u.fsPath));
+      if (rels.some((r) => r.startsWith("..") || path.isAbsolute(r))) {
+        throw new Error("Only files inside the devsync project can be pulled.");
       }
+      await this.pullPaths(rels.some((r) => r === "") ? [] : rels);
+    });
+
+    // Pick remote files/folders from a searchable list.
+    reg("devsync.pullPick", async () => {
+      const root = this.requireRoot();
+      type Item = vscode.QuickPickItem & { rel: string };
+      const qp = vscode.window.createQuickPick<Item>();
+      qp.title = "Pull from remote";
+      qp.canSelectMany = true;
+      qp.matchOnDescription = true;
+      qp.placeholder = "Type to filter · Space to select · Enter to pull";
+      const showAll = { iconPath: new vscode.ThemeIcon("list-flat"), tooltip: "Show all remote files" };
+      const onlyChanged = { iconPath: new vscode.ThemeIcon("filter"), tooltip: "Show only remote changes" };
+      let all = false;
+      const load = async () => {
+        qp.busy = true;
+        qp.buttons = [all ? onlyChanged : showAll];
+        qp.placeholder = all
+          ? "All remote files · type to filter · Space to select · Enter to pull"
+          : "Remote changes · type to filter · Space to select · Enter to pull";
+        try {
+          const r = await runJson<{ files: { path: string; size: number; status: string }[] }>(
+            root,
+            all ? ["ls"] : ["ls", "--changed"],
+            120_000,
+          );
+          const label: Record<string, [string, string]> = {
+            new: ["$(diff-added)", "only on remote"],
+            changed: ["$(diff-modified)", "changed on remote"],
+            edited: ["$(warning)", "changed on both sides — yours is kept, remote saved alongside"],
+            same: ["$(check)", "same as yours"],
+          };
+          // Folders first (with how many files they contain), then files.
+          const dirs = new Map<string, number>();
+          for (const f of r.files) {
+            const parts = f.path.split("/");
+            for (let i = 1; i < parts.length; i++) {
+              const d = parts.slice(0, i).join("/");
+              dirs.set(d, (dirs.get(d) ?? 0) + 1);
+            }
+          }
+          const folderItems: Item[] = [...dirs.entries()].sort().map(([d, n]) => ({
+            rel: d,
+            label: `$(folder) ${d}/`,
+            description: `${n} file(s)`,
+          }));
+          const fileItems: Item[] = r.files.map((f) => ({
+            rel: f.path,
+            label: `${label[f.status]?.[0] ?? ""} ${f.path}`,
+            description: label[f.status]?.[1] ?? f.status,
+          }));
+          qp.items = [
+            ...(folderItems.length ? [{ rel: "", label: "Folders", kind: vscode.QuickPickItemKind.Separator }] : []),
+            ...folderItems,
+            ...(fileItems.length ? [{ rel: "", label: "Files", kind: vscode.QuickPickItemKind.Separator }] : []),
+            ...fileItems,
+          ] as Item[];
+          if (!r.files.length) {
+            qp.placeholder = all ? "The remote has no files yet" : "No remote changes — use the list button to see all files";
+          }
+        } catch (e) {
+          qp.hide();
+          void vscode.window.showErrorMessage(`devsync: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+          qp.busy = false;
+        }
+      };
+      qp.onDidTriggerButton(() => {
+        all = !all;
+        void load();
+      });
+      qp.onDidAccept(() => {
+        const rels = qp.selectedItems.map((i) => i.rel).filter((r) => r !== "");
+        qp.hide();
+        if (rels.length) void this.pullPaths(rels).catch((e) => vscode.window.showErrorMessage(`devsync: ${e.message ?? e}`));
+      });
+      qp.onDidHide(() => qp.dispose());
+      qp.show();
+      await load();
     });
 
     reg("devsync.startWatch", () => this.startWatch());

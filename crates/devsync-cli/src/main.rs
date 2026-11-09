@@ -96,23 +96,45 @@ pub enum Cmd {
     Kill { id: Option<String> },
     /// Fetch output of running jobs into .devsync/jobs/ once, then exit.
     Collect,
-    /// Get code from the remote: the whole project (safe) or a given path.
+    /// Get code from the remote: the whole project, or specific files/folders.
     ///
-    /// Without a path: bring the remote's changes into this project. Files only
-    /// on the remote, or that you haven't edited since the last sync, are
-    /// updated; files you edited keep your version and the remote one is saved
-    /// as <file>.devsync-remote. Sync excludes apply.
+    /// Files that are new on the remote, or that you haven't edited since the
+    /// last sync, are updated. Files you edited keep your version and the
+    /// remote one is saved as <file>.devsync-remote (use --force to overwrite
+    /// instead). Without paths the whole project is pulled and sync excludes
+    /// apply; named paths are pulled even if excluded by `sync.ignore` or
+    /// .gitignore. Built-in excludes (.git, node_modules, .venv, caches) and
+    /// .devsyncignore always apply.
     ///
-    /// With a path: copy that remote file or directory exactly (overwriting
-    /// local copies; excludes don't apply).
+    /// Examples: `devsync pull`, `devsync pull src/api tests/test_api.py`,
+    /// `devsync pull results/ --to ~/Downloads`.
     Pull {
-        /// Path relative to the remote project root (omit to pull the whole project safely).
-        path: Option<String>,
-        /// Local directory to place it under (default: project root; only with a path).
-        dest: Option<PathBuf>,
+        /// Remote files or directories, relative to the project (omit for everything).
+        paths: Vec<String>,
+        /// Overwrite local edits with the remote version.
+        #[arg(long)]
+        force: bool,
+        /// Copy the paths into another local directory instead (exact copy).
+        #[arg(long, value_name = "DIR")]
+        to: Option<PathBuf>,
         /// Show what would change without downloading.
         #[arg(short = 'n', long)]
         dry_run: bool,
+    },
+    /// List files on the remote and how they compare with yours.
+    ///
+    /// Markers: + only on the remote, ~ changed on the remote, ! changed on
+    /// both sides, = identical.
+    Ls {
+        /// Only under these remote paths.
+        paths: Vec<String>,
+        /// Only files that differ from your copy (+, ~, !).
+        #[arg(short, long)]
+        changed: bool,
+        /// Include paths excluded by `sync.ignore` / .gitignore (built-in
+        /// excludes and .devsyncignore always apply).
+        #[arg(short, long)]
+        all: bool,
     },
     /// Configuration, connectivity and pending changes.
     Status,

@@ -48,7 +48,7 @@ a bigger **Run** box:
 | Section | What it's for |
 | --- | --- |
 | **Run** | Status dot and remote address, a command field, a full-width **▶ Run on Remote** button, **Run in Background** and **Terminal**, and your **Recent** commands (click to edit, ▶ to run again). Enter runs; ⌘Enter runs in the background; Shift+Enter adds a line |
-| **Not on Remote Yet** | Same A/M/D list as in Source Control, with Pull, Push and Pause/Resume buttons |
+| **Not on Remote Yet** | Same A/M/D list as in Source Control, with Pull, Pull Files…, Push and Pause/Resume buttons |
 | **Conflicts** | Appears only when there are conflicts |
 | **Remote Jobs** | ✓ / ✗ / spinner for each job; click for output; ■ stop, ↻ run again |
 
@@ -59,6 +59,16 @@ field.
 You can drag the icon to reorder it, or drag the devsync sections into the
 Secondary Side Bar. If you only want the sidebar, set
 `devsync.sourceControl` to `false` to hide devsync from the Source Control view.
+
+### Pulling from the remote
+
+- **⬇ Pull All** (sidebar) or **Pull Everything from Remote**: get every
+  remote change. Your edits are never overwritten; conflicts appear under
+  **Conflicts**.
+- **Pull Files…**: choose remote files or folders from a searchable list
+  (changes only by default; the list button shows everything).
+- **Right-click** a file or folder in the Explorer, or an editor tab, then
+  choose **devsync: Pull from Remote** for just that item.
 
 ## Status bar
 

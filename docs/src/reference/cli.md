@@ -18,7 +18,8 @@ current directory and its parents.
 | [`jobs`](#devsync-jobs) | List jobs |
 | [`kill`](#devsync-kill) | Stop a running job (default: the latest) |
 | [`collect`](#devsync-collect) | Fetch output of running jobs into .devsync/jobs/ once, then exit |
-| [`pull`](#devsync-pull) | Get code from the remote: the whole project (safe) or a given path |
+| [`pull`](#devsync-pull) | Get code from the remote: the whole project, or specific files/folders |
+| [`ls`](#devsync-ls) | List files on the remote and how they compare with yours |
 | [`status`](#devsync-status) | Configuration, connectivity and pending changes |
 | [`changes`](#devsync-changes) | Local changes not yet on the remote, like `git status` (no network) |
 | [`doctor`](#devsync-doctor) | Check the whole setup end to end and explain problems |
@@ -44,7 +45,8 @@ Commands:
   jobs         List jobs
   kill         Stop a running job (default: the latest)
   collect      Fetch output of running jobs into .devsync/jobs/ once, then exit
-  pull         Get code from the remote: the whole project (safe) or a given path
+  pull         Get code from the remote: the whole project, or specific files/folders
+  ls           List files on the remote and how they compare with yours
   status       Configuration, connectivity and pending changes
   changes      Local changes not yet on the remote, like `git status` (no network)
   doctor       Check the whole setup end to end and explain problems
@@ -226,27 +228,66 @@ Options:
 ## devsync pull
 
 ```text
-Get code from the remote: the whole project (safe) or a given path.
+Get code from the remote: the whole project, or specific files/folders.
 
-Without a path: bring the remote's changes into this project. Files only on the remote, or that you haven't edited since the last sync, are updated; files you edited keep your version and the remote one is saved as <file>.devsync-remote. Sync excludes apply.
+Files that are new on the remote, or that you haven't edited since the last sync, are updated. Files you edited keep your version and the remote one is saved as <file>.devsync-remote (use --force to overwrite instead). Without paths the whole project is pulled and sync excludes apply; named paths are pulled even if excluded by `sync.ignore` or .gitignore. Built-in excludes (.git, node_modules, .venv, caches) and .devsyncignore always apply.
 
-With a path: copy that remote file or directory exactly (overwriting local copies; excludes don't apply).
+Examples: `devsync pull`, `devsync pull src/api tests/test_api.py`, `devsync pull results/ --to ~/Downloads`.
 
-Usage: devsync pull [OPTIONS] [PATH] [DEST]
+Usage: devsync pull [OPTIONS] [PATHS]...
 
 Arguments:
-  [PATH]
-          Path relative to the remote project root (omit to pull the whole project safely)
-
-  [DEST]
-          Local directory to place it under (default: project root; only with a path)
+  [PATHS]...
+          Remote files or directories, relative to the project (omit for everything)
 
 Options:
   -C, --dir <DIR>
           Run as if started in this directory
 
+      --force
+          Overwrite local edits with the remote version
+
+      --json
+          Machine-readable output (NDJSON events / JSON results)
+
+      --to <DIR>
+          Copy the paths into another local directory instead (exact copy)
+
   -n, --dry-run
           Show what would change without downloading
+
+  -v, --verbose
+          Show every file transferred and connection details
+
+  -q, --quiet
+          Only errors and warnings
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+
+## devsync ls
+
+```text
+List files on the remote and how they compare with yours.
+
+Markers: + only on the remote, ~ changed on the remote, ! changed on both sides, = identical.
+
+Usage: devsync ls [OPTIONS] [PATHS]...
+
+Arguments:
+  [PATHS]...
+          Only under these remote paths
+
+Options:
+  -c, --changed
+          Only files that differ from your copy (+, ~, !)
+
+  -C, --dir <DIR>
+          Run as if started in this directory
+
+  -a, --all
+          Include paths excluded by `sync.ignore` / .gitignore (built-in excludes and .devsyncignore always apply)
 
       --json
           Machine-readable output (NDJSON events / JSON results)

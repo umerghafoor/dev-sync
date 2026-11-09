@@ -400,3 +400,65 @@ fn pull_brings_remote_changes_without_losing_local_edits() {
     let changes = ok(&devsync(&env.local, &["changes"]));
     assert_eq!(changes.trim(), "M b.txt", "{changes}");
 }
+
+#[test]
+fn pull_specific_files_and_folders_and_list_remote() {
+    let env = setup();
+    write(&env.local.join("src/api/a.py"), "a1");
+    write(&env.local.join("src/web/w.js"), "w1");
+    write(&env.local.join("notes.txt"), "n1");
+    ok(&devsync(&env.local, &["push"]));
+
+    write(&env.remote.join("src/api/a.py"), "a2 remote");
+    write(&env.remote.join("src/api/new.py"), "new remote");
+    write(&env.remote.join("src/web/w.js"), "w2 remote");
+    write(&env.remote.join("notes.txt"), "n2 remote");
+    write(&env.local.join("notes.txt"), "n-local-edit");
+    write(&env.remote.join("node_modules/dep/i.js"), "dep");
+    write(&env.remote.join("data/big.csv"), "1,2,3");
+    set_config(&env, "ignore = []", "ignore = [\"data/\"]");
+
+    // ls shows what differs, with markers.
+    let listing = ok(&devsync(&env.local, &["ls", "--changed"]));
+    assert!(listing.contains("~") && listing.contains("src/api/a.py"), "{listing}");
+    assert!(listing.contains("+") && listing.contains("src/api/new.py"), "{listing}");
+    assert!(listing.contains("! ") && listing.contains("notes.txt"), "{listing}");
+    assert!(!listing.contains("data/big.csv"), "sync.ignore'd paths hidden unless --all: {listing}");
+    assert!(ok(&devsync(&env.local, &["ls", "--all", "data"])).contains("data/big.csv"));
+    assert!(!ok(&devsync(&env.local, &["ls", "--all"])).contains("node_modules"), "built-in excludes never listed");
+    let v: serde_json::Value =
+        serde_json::from_str(ok(&devsync(&env.local, &["--json", "ls", "src/web"])).trim()).unwrap();
+    assert_eq!(v["files"][0]["path"], "src/web/w.js");
+    assert_eq!(v["files"][0]["status"], "changed");
+
+    // Pull one folder: only that folder changes.
+    ok(&devsync(&env.local, &["pull", "src/api"]));
+    assert_eq!(fs::read_to_string(env.local.join("src/api/a.py")).unwrap(), "a2 remote");
+    assert_eq!(fs::read_to_string(env.local.join("src/api/new.py")).unwrap(), "new remote");
+    assert_eq!(fs::read_to_string(env.local.join("src/web/w.js")).unwrap(), "w1", "other folders untouched");
+
+    // Pull a single file you edited: kept, remote saved alongside…
+    ok(&devsync(&env.local, &["pull", "./notes.txt"]));
+    assert_eq!(fs::read_to_string(env.local.join("notes.txt")).unwrap(), "n-local-edit");
+    assert_eq!(fs::read_to_string(env.local.join("notes.txt.devsync-remote")).unwrap(), "n2 remote");
+    // …unless --force.
+    ok(&devsync(&env.local, &["pull", "--force", "notes.txt"]));
+    assert_eq!(fs::read_to_string(env.local.join("notes.txt")).unwrap(), "n2 remote");
+
+    // Several paths at once, including one excluded by sync.ignore, named explicitly.
+    ok(&devsync(&env.local, &["pull", "src/web/w.js", "data"]));
+    assert_eq!(fs::read_to_string(env.local.join("src/web/w.js")).unwrap(), "w2 remote");
+    assert_eq!(fs::read_to_string(env.local.join("data/big.csv")).unwrap(), "1,2,3");
+    // Built-in excludes are never pulled.
+    assert!(!devsync(&env.local, &["pull", "node_modules/dep"]).status.success());
+
+    // --to copies elsewhere without touching the project.
+    let elsewhere = env.local.parent().unwrap().join("elsewhere");
+    ok(&devsync(&env.local, &["pull", "src/api", "--to", elsewhere.to_str().unwrap()]));
+    assert_eq!(fs::read_to_string(elsewhere.join("src/api/new.py")).unwrap(), "new remote");
+
+    // Unknown path is a clear error.
+    let o = devsync(&env.local, &["pull", "does/not/exist"]);
+    assert!(!o.status.success());
+    assert!(String::from_utf8_lossy(&o.stderr).contains("nothing on the remote at does/not/exist"));
+}

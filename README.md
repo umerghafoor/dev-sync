@@ -97,7 +97,8 @@ devsync exec -- pytest -x
 | `devsync jobs` / `devsync kill [id]` | List / stop jobs |
 | `devsync shell` | Interactive shell in the matching remote directory |
 | `devsync forward 3000` | `localhost:3000` → remote port 3000, auto-reconnecting |
-| `devsync pull` | Get the remote's changes (never overwrites your edits) |
+| `devsync pull [paths…]` | Get the remote's changes, all or just some files/folders (never overwrites your edits) |
+| `devsync ls --changed` | See what changed on the remote before pulling |
 | `devsync status` | Link state, pending changes, running jobs |
 | `devsync setup claude` | Route Claude Code's commands to the remote |
 

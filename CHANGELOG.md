@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and locally untouched files are updated, files you edited keep your version
   (the remote one is saved as `<file>.devsync-remote`), sync excludes apply;
   `--dry-run` previews. VS Code: **Pull from Remote** button.
+- `devsync pull <paths…>` pulls specific files or folders with the same
+  safety rules; `--force` overwrites local edits; `--to DIR` copies elsewhere.
+- `devsync ls [paths…]` lists remote files with `+`/`~`/`!`/`=` markers
+  (`--changed`, `--all`, `--json`).
+- VS Code: **Pull from Remote** in the Explorer and editor-tab context menus,
+  and **Pull Files…**, a searchable picker of remote files and folders.
 - `devsync changes`: git-status-like list of local changes not yet on the
   remote (`--json` supported).
 - Project logo.

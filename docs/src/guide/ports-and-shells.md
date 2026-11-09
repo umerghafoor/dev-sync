@@ -57,13 +57,53 @@ nothing you edited is ever overwritten. Run it, review any
 `.devsync-remote` files, then push as usual. In VS Code: **⬇ Pull from
 Remote** in the devsync sidebar or the Source Control toolbar.
 
-**A specific path, exactly:**
+**See what's on the remote first:**
 
 ```bash
-devsync pull results/
-devsync pull logs/train.log /tmp/
+devsync ls --changed
+devsync ls src/api
+devsync ls --all
 ```
 
-With a path, `pull` copies those remote files exactly, **overwriting** local
-copies and ignoring sync excludes. The first command writes into `./results/`;
-the second into `/tmp/logs/train.log`. Transfers are verified and atomic.
+| Marker | Meaning |
+| --- | --- |
+| `+` | only on the remote |
+| `~` | changed on the remote (you haven't touched your copy) |
+| `!` | changed on both sides |
+| `=` | identical |
+
+`--changed` hides identical files; `--all` also lists paths excluded by
+`sync.ignore` or `.gitignore`.
+
+**Only some files or folders:**
+
+```bash
+devsync pull src/api
+devsync pull src/api/models.py tests/
+devsync pull --dry-run src/
+devsync pull --force config/settings.py
+```
+
+The same safety rules apply to just those paths. `--force` overwrites your
+edits with the remote version instead of saving `*.devsync-remote`. Named
+paths are pulled even if `sync.ignore` or `.gitignore` excludes them; the
+built-in excludes (`.git`, `node_modules`, `.venv`, caches) and
+`.devsyncignore` always apply.
+
+**Copy somewhere else instead:**
+
+```bash
+devsync pull results/ --to ~/Downloads
+```
+
+`--to` copies the remote files exactly into another directory (here
+`~/Downloads/results/…`) without touching your project.
+
+**In VS Code:**
+
+- right-click files or folders in the Explorer, or an editor tab, then
+  choose **devsync: Pull from Remote**;
+- **Pull Files…** (devsync sidebar, or the command palette) opens a
+  searchable list of remote changes, including files you don't have yet,
+  with folders at the top. Select several with Space and press Enter. The
+  list button switches to all remote files.

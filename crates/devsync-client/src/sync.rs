@@ -207,14 +207,44 @@ pub struct PullStats {
     pub conflicts: Vec<(String, String)>,
 }
 
-/// Brings remote changes into the local tree without losing local work:
+/// How a remote file relates to the local copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RemoteStatus {
+    /// Only on the remote.
+    New,
+    /// Changed on the remote; the local copy is untouched since the last sync.
+    Changed,
+    /// Differs, and the local copy was edited too (or was never synced).
+    Edited,
+    /// Identical on both sides.
+    Same,
+}
+
+fn remote_status(local: Option<&Entry>, remote: &Entry, snap: &Snapshot) -> RemoteStatus {
+    match local {
+        None => RemoteStatus::New,
+        Some(l) if devsync_fs::diff::same(l, remote) => RemoteStatus::Same,
+        Some(l) if snap.get(&remote.path) == Some(&l.hash) => RemoteStatus::Changed,
+        Some(_) => RemoteStatus::Edited,
+    }
+}
+
+struct PullOpts<'a> {
+    dry_run: bool,
+    /// Overwrite local edits instead of saving the remote copy alongside.
+    force: bool,
+    /// Prefix for the progress message.
+    what: &'a str,
+}
+
+/// Brings remote files into the local tree without losing local work:
 /// - missing locally, or locally unchanged since the last sync → take the remote file;
 /// - edited locally (differs from the last-synced version) → keep it and save
-///   the remote version as `<file>.devsync-remote`.
+///   the remote version as `<file>.devsync-remote` (unless `force`).
 ///
 /// With no sync history (first sync), every differing local file counts as
 /// edited, so nothing local is ever overwritten.
-#[allow(clippy::too_many_arguments)] // private helper shared by push and pull
 fn pull_remote(
     s: &mut Session,
     p: &Project,
@@ -222,16 +252,15 @@ fn pull_remote(
     local: &[Entry],
     remote: &[Entry],
     snap: &mut Snapshot,
-    dry_run: bool,
-    what: &str,
+    opts: &PullOpts,
 ) -> Result<PullStats> {
     let local_map: HashMap<&str, &Entry> = local.iter().map(|e| (e.path.as_str(), e)).collect();
     let mut take = Vec::new();
     let mut keep_both = Vec::new();
     for e in remote {
-        match local_map.get(e.path.as_str()) {
-            Some(l) if devsync_fs::diff::same(l, e) => snap.set(&e.path, e.hash),
-            Some(l) if snap.get(&e.path) != Some(&l.hash) => keep_both.push(e),
+        match remote_status(local_map.get(e.path.as_str()).copied(), e, snap) {
+            RemoteStatus::Same => snap.set(&e.path, e.hash),
+            RemoteStatus::Edited if !opts.force => keep_both.push(e),
             _ => take.push(e),
         }
     }
@@ -245,10 +274,15 @@ fn pull_remote(
         format!("; {} file(s) you edited locally are kept (remote versions saved as *.devsync-remote)", keep_both.len())
     };
     rep.event(Event::Info {
-        message: format!("{what}: {} {} file(s){both}", if dry_run { "would update" } else { "updating" }, take.len()),
+        message: format!(
+            "{}: {} {} file(s){both}",
+            opts.what,
+            if opts.dry_run { "would update" } else { "updating" },
+            take.len()
+        ),
     });
     for e in &take {
-        if !dry_run {
+        if !opts.dry_run {
             download(s, &p.root, e, &p.root.join(&e.path))?;
             snap.set(&e.path, e.hash);
         }
@@ -257,13 +291,43 @@ fn pull_remote(
     }
     for e in &keep_both {
         let alt = format!("{}.devsync-remote", e.path);
-        if !dry_run {
+        if !opts.dry_run {
             download(s, &p.root, e, &p.root.join(&alt))?;
         }
         rep.event(Event::Conflict { path: e.path.clone(), saved_as: alt.clone() });
         stats.conflicts.push((e.path.clone(), alt));
     }
     Ok(stats)
+}
+
+fn remote_manifest(s: &mut Session, ignore: devsync_proto::IgnoreSpec) -> Result<Vec<Entry>> {
+    match s.call(&Request::Manifest { ignore })? {
+        Response::Manifest(m) => Ok(m),
+        other => Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
+    }
+}
+
+/// Normalises user-supplied remote paths: `./src/` → `src`, `.` → "" (everything).
+fn normalize_paths(paths: &[String]) -> Result<Vec<String>> {
+    paths
+        .iter()
+        .map(|raw| {
+            let mut s = raw.trim().to_string();
+            while let Some(rest) = s.strip_prefix("./") {
+                s = rest.to_string();
+            }
+            let s = s.trim_end_matches('/').to_string();
+            if s == "." || s.is_empty() {
+                return Ok(String::new());
+            }
+            devsync_fs::validate_rel(&s).map_err(|e| ClientError::Other(e.to_string()))?;
+            Ok(s)
+        })
+        .collect()
+}
+
+fn under(path: &str, prefixes: &[String]) -> bool {
+    prefixes.iter().any(|p| p.is_empty() || path == p || path.starts_with(&format!("{p}/")))
 }
 
 /// `devsync pull` without a path: bring the whole project's remote changes
@@ -273,17 +337,81 @@ pub fn pull_project(p: &Project, rep: &dyn Reporter, dry_run: bool) -> Result<Pu
         let local = local_manifest(p)?;
         rep.event(Event::Connecting { host: p.host_label() });
         let mut s = p.connect()?;
-        let remote = match s.call(&Request::Manifest { ignore: p.ignore_spec() })? {
-            Response::Manifest(m) => m,
-            other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
-        };
+        let remote = remote_manifest(&mut s, p.ignore_spec())?;
         let mut snap = Snapshot::load(p);
-        let stats = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, dry_run, "pulling from remote")?;
+        let opts = PullOpts { dry_run, force: false, what: "pulling from remote" };
+        let stats = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, &opts)?;
         s.close();
         if !dry_run {
             snap.save();
         }
         Ok(stats)
+    })
+}
+
+/// `devsync pull <paths…>`: like [`pull_project`], limited to the given
+/// remote files/directories. Because the paths are named explicitly,
+/// `sync.ignore` and .gitignore don't apply; built-in excludes and
+/// .devsyncignore still do (both sides scan with them).
+/// `force` overwrites local edits instead of saving `*.devsync-remote`.
+pub fn pull_paths(p: &Project, rep: &dyn Reporter, paths: &[String], force: bool, dry_run: bool) -> Result<PullStats> {
+    let wanted = normalize_paths(paths)?;
+    p.with_retry(rep, || {
+        rep.event(Event::Connecting { host: p.host_label() });
+        let mut s = p.connect()?;
+        let all = remote_manifest(&mut s, devsync_proto::IgnoreSpec::default())?;
+        let remote: Vec<Entry> = all.into_iter().filter(|e| under(&e.path, &wanted)).collect();
+        if remote.is_empty() {
+            return Err(ClientError::Other(format!("nothing on the remote at {}", paths.join(", "))));
+        }
+        // Local state of exactly these files, whatever the excludes say.
+        let mut cache = HashCache::load(p.state_dir().join("hash-cache.v2.bin"));
+        let mut local = Vec::new();
+        for e in &remote {
+            if let Some(l) = scan_one(&p.root, &e.path, &mut cache)? {
+                local.push(l);
+            }
+        }
+        let mut snap = Snapshot::load(p);
+        let opts = PullOpts { dry_run, force, what: "pulling from remote" };
+        let stats = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, &opts)?;
+        s.close();
+        if !dry_run {
+            snap.save();
+        }
+        Ok(stats)
+    })
+}
+
+/// One remote file and how it compares with the local copy.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct RemoteFile {
+    pub path: String,
+    pub size: u64,
+    pub status: RemoteStatus,
+}
+
+/// Lists remote files (optionally under `paths`) with their status relative
+/// to the local tree. `all` includes paths the sync excludes would skip.
+pub fn list_remote(p: &Project, rep: &dyn Reporter, paths: &[String], all: bool) -> Result<Vec<RemoteFile>> {
+    let wanted = normalize_paths(paths)?;
+    p.with_retry(rep, || {
+        let mut s = p.connect()?;
+        let spec = if all { devsync_proto::IgnoreSpec::default() } else { p.ignore_spec() };
+        let remote = remote_manifest(&mut s, spec)?;
+        s.close();
+        let snap = Snapshot::load(p);
+        let mut cache = HashCache::load(p.state_dir().join("hash-cache.v2.bin"));
+        let mut out = Vec::new();
+        for e in remote.iter().filter(|e| wanted.is_empty() || under(&e.path, &wanted)) {
+            let local = scan_one(&p.root, &e.path, &mut cache)?;
+            out.push(RemoteFile {
+                path: e.path.clone(),
+                size: e.size,
+                status: remote_status(local.as_ref(), e, &snap),
+            });
+        }
+        Ok(out)
     })
 }
 
@@ -300,8 +428,8 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
     // or new folder never overwrites (or, with delete on, wipes) the project.
     let mut snap = Snapshot::load(p);
     if p.config.sync.initial_pull && !remote.is_empty() && !snap.existed() {
-        let pulled =
-            pull_remote(&mut s, p, rep, &local, &remote, &mut snap, opts.dry_run, "first sync with this remote")?;
+        let first = PullOpts { dry_run: opts.dry_run, force: false, what: "first sync with this remote" };
+        let pulled = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, &first)?;
         if !opts.dry_run && !(pulled.updated.is_empty() && pulled.conflicts.is_empty()) {
             local = local_manifest(p)?;
         }

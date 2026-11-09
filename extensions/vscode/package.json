@@ -57,6 +57,18 @@
       },
       {
         "command": "devsync.pull",
+        "title": "Pull Everything from Remote",
+        "category": "devsync",
+        "icon": "$(repo-pull)"
+      },
+      {
+        "command": "devsync.pullPick",
+        "title": "Pull Files from Remote…",
+        "category": "devsync",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "devsync.pullPaths",
         "title": "Pull from Remote",
         "category": "devsync",
         "icon": "$(repo-pull)"
@@ -278,6 +290,11 @@
           "command": "devsync.walkthrough",
           "when": "scmProvider == devsync",
           "group": "4_setup@2"
+        },
+        {
+          "command": "devsync.pullPick",
+          "when": "scmProvider == devsync",
+          "group": "2_sync@0"
         }
       ],
       "scm/resourceGroup/context": [
@@ -414,6 +431,10 @@
         {
           "command": "devsync.focusRun",
           "when": "true"
+        },
+        {
+          "command": "devsync.pullPaths",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -421,6 +442,11 @@
           "command": "devsync.pull",
           "when": "view == devsync.run",
           "group": "navigation@0"
+        },
+        {
+          "command": "devsync.pullPick",
+          "when": "view == devsync.changes",
+          "group": "navigation@0.5"
         },
         {
           "command": "devsync.pull",
@@ -553,6 +579,20 @@
           "command": "devsync.killJob",
           "when": "view =~ /^devsync\\./ && viewItem == job-running",
           "group": "1_job@3"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "devsync.pullPaths",
+          "when": "devsync.active",
+          "group": "7_devsync@1"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "devsync.pullPaths",
+          "when": "devsync.active && resourceScheme == file",
+          "group": "7_devsync@1"
         }
       ]
     },
