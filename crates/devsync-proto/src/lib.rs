@@ -11,7 +11,16 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
 /// Bumped on any incompatible change to the messages below.
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
+
+/// Sent by the agent before anything else. The client discards whatever
+/// precedes it (output from the remote user's shell startup files) and sends
+/// nothing until it arrives, so startup files can neither corrupt nor consume
+/// protocol data.
+pub const GREETING: &[u8] = b"\x00\x7fdevsync-agent-ready\x00\n";
+
+/// Most bytes of shell noise tolerated before the greeting.
+pub const MAX_PREAMBLE: usize = 1024 * 1024;
 
 /// Upper bound for a single frame; protects both sides from garbage input.
 pub const MAX_FRAME: usize = 64 * 1024 * 1024;
@@ -216,6 +225,27 @@ pub fn recv<R: Read, T: for<'de> Deserialize<'de>>(r: &mut R) -> Result<T, Frame
     decode(&read_frame(r)?)
 }
 
+/// Reads until [`GREETING`] and returns whatever came before it.
+pub fn read_greeting<R: Read>(r: &mut R) -> Result<Vec<u8>, FrameError> {
+    let mut seen = Vec::new();
+    let mut byte = [0u8; 1];
+    loop {
+        match r.read(&mut byte) {
+            Ok(0) => return Err(FrameError::Closed),
+            Ok(_) => seen.push(byte[0]),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e.into()),
+        }
+        if seen.ends_with(GREETING) {
+            seen.truncate(seen.len() - GREETING.len());
+            return Ok(seen);
+        }
+        if seen.len() > MAX_PREAMBLE {
+            return Err(FrameError::TooLarge(seen.len()));
+        }
+    }
+}
+
 pub fn hash_hex(h: &Hash) -> String {
     h.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -241,6 +271,20 @@ mod tests {
         assert_eq!(recv::<_, Request>(&mut r).unwrap(), req);
         assert_eq!(recv::<_, Request>(&mut r).unwrap(), Request::JobList);
         assert!(matches!(recv::<_, Request>(&mut r), Err(FrameError::Closed)));
+    }
+
+    #[test]
+    fn greeting_skips_shell_noise() {
+        let mut stream = b"Welcome to box!\nconda activated\n".to_vec();
+        stream.extend_from_slice(GREETING);
+        send(&mut stream, &Request::JobList).unwrap();
+        let mut r = &stream[..];
+        assert_eq!(read_greeting(&mut r).unwrap(), b"Welcome to box!\nconda activated\n");
+        assert_eq!(recv::<_, Request>(&mut r).unwrap(), Request::JobList);
+        let mut clean = GREETING.to_vec();
+        assert!(read_greeting(&mut &clean[..]).unwrap().is_empty());
+        clean.truncate(5);
+        assert!(matches!(read_greeting(&mut &clean[..]), Err(FrameError::Closed)));
     }
 
     #[test]

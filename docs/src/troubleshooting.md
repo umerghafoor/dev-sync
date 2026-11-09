@@ -47,6 +47,27 @@ a source checkout, run `sh install.sh` (it builds them), or set
 The remote home is probably mounted `noexec`, or the remote uses an
 unsupported architecture. Check with `ssh you@server 'uname -sm; mount | grep home'`.
 
+## `frame too large`, or the remote "printed N bytes without starting the devsync agent"
+
+Something in the remote shell's startup files (`~/.bashrc`, `~/.profile`,
+`/etc/profile.d/…`) runs when ssh starts a non-interactive command.
+devsync ignores anything those files *print* (banners, conda/nvm messages)
+and sends nothing until its agent is running, so they can't swallow its data. Remaining cases:
+
+- **A startup file waits for input** (a prompt, `read`, a menu). The
+  connection then times out. Make it run only in interactive shells, e.g.
+  put it below this line in `~/.bashrc`:
+
+  ```bash
+  case $- in *i*) ;; *) return;; esac
+  ```
+
+- **A startup file prints megabytes of output.** Same fix.
+
+`ControlSocket … already exists, disabling multiplexing` is harmless: two
+devsync sessions started at the same moment, and one didn't share the
+connection.
+
 ## A command works over `ssh` but not with devsync
 
 devsync runs commands in a **non-interactive login shell**, which loads

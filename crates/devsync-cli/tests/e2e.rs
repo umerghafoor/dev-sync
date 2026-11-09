@@ -224,6 +224,8 @@ done
 shift
 export HOME="{home}"
 cd "$HOME"
+# Like a chatty ~/.bashrc: print a banner and stray bytes before every command.
+[ -n "$FAKE_SSH_NOISE" ] && printf 'Welcome to the box!\n\006:u\316 conda ready\n'
 exec sh -c "$*"
 "#,
         down = dir.join("DOWN").display(),
@@ -249,6 +251,7 @@ fn ssh_transport_deploys_agent_and_recovers_from_outage() {
             .current_dir(&local)
             .env("NO_COLOR", "1")
             .env("DEVSYNC_SSH", &ssh)
+            .env("FAKE_SSH_NOISE", "1")
             .output()
             .unwrap()
     };

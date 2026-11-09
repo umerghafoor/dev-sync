@@ -110,15 +110,17 @@ pub fn run(
     let mut child = c.spawn().map_err(|e| TransportError::Fatal(format!("cannot run ssh: {e}")))?;
     let mut out = child.stdout.take().expect("stdout");
     let mut err = child.stderr.take().expect("stderr");
+    // Read raw bytes: shell startup files may print anything, including
+    // invalid UTF-8, and that must not hide the output we need.
     let t_out = std::thread::spawn(move || {
-        let mut s = String::new();
-        let _ = out.read_to_string(&mut s);
-        s
+        let mut b = Vec::new();
+        let _ = out.read_to_end(&mut b);
+        String::from_utf8_lossy(&b).into_owned()
     });
     let t_err = std::thread::spawn(move || {
-        let mut s = String::new();
-        let _ = err.read_to_string(&mut s);
-        s
+        let mut b = Vec::new();
+        let _ = err.read_to_end(&mut b);
+        String::from_utf8_lossy(&b).into_owned()
     });
     let deadline = Instant::now() + timeout;
     let code = loop {
@@ -141,9 +143,19 @@ pub fn run(
 }
 
 /// Detects the remote platform as (os, arch).
+/// Marker printed before command output we parse, so text printed by the
+/// remote shell's startup files is ignored.
+const MARK: &str = "__devsync_out__";
+
+/// The output after [`MARK`] (first line), if present.
+fn marked(stdout: &str) -> Option<&str> {
+    stdout.rsplit_once(MARK).map(|(_, rest)| rest.trim())
+}
+
 pub fn probe(ssh: &SshConfig) -> Result<(String, String), TransportError> {
-    let o = run(ssh, "uname -sm", None, Duration::from_secs(30))?;
-    let mut it = o.stdout.split_whitespace();
+    let o = run(ssh, &format!("echo {MARK}; uname -sm"), None, Duration::from_secs(30))?;
+    let out = marked(&o.stdout).unwrap_or_default();
+    let mut it = out.split_whitespace();
     match (it.next(), it.next()) {
         (Some(os), Some(arch)) => Ok(normalize(os, arch)),
         _ => Err(TransportError::Deploy(format!("cannot detect remote platform (uname said {:?})", o.stdout.trim()))),
@@ -174,12 +186,29 @@ pub fn ensure_agent(ssh: &SshConfig) -> Result<String, TransportError> {
     if up.code != Some(0) {
         return Err(TransportError::Deploy(format!("upload failed: {}", up.stderr.trim())));
     }
+    // A shell startup file that reads stdin would have eaten part of the upload.
+    let want = std::fs::metadata(&bin).map(|m| m.len()).unwrap_or(0);
+    let check = run(ssh, &format!("echo {MARK}; wc -c < {dest}"), None, Duration::from_secs(30))?;
+    let got: u64 = marked(&check.stdout).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+    if got != want {
+        let _ = run(ssh, &format!("rm -f {dest}"), None, Duration::from_secs(30));
+        return Err(TransportError::Deploy(format!(
+            "the uploaded agent is {got} bytes instead of {want}. Something in your remote shell startup \
+             files (~/.bashrc, ~/.profile) reads input in non-interactive shells; make it skip those"
+        )));
+    }
     Ok(name)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn marker_ignores_shell_noise() {
+        assert_eq!(marked("Welcome!\nconda ready\n__devsync_out__\nLinux x86_64\n"), Some("Linux x86_64"));
+        assert_eq!(marked("Linux x86_64\n"), None);
+    }
 
     #[test]
     fn platform_mapping() {

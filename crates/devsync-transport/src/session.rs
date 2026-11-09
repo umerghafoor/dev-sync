@@ -33,12 +33,16 @@ pub struct RemoteInfo {
     pub root: String,
     pub agent_version: String,
     pub agent_name: Option<String>,
+    /// Protocol of the cached agent; a cache from another protocol is ignored.
+    #[serde(default)]
+    pub protocol: u32,
 }
 
 pub struct Session {
     child: Child,
     writer: Option<BufWriter<ChildStdin>>,
     rx: Receiver<Result<Vec<u8>, FrameError>>,
+    greeting: Receiver<Result<Vec<u8>, FrameError>>,
     stderr: Arc<Mutex<Vec<u8>>>,
     timeout: Duration,
     pub info: RemoteInfo,
@@ -65,7 +69,14 @@ pub(crate) fn classify_ssh_failure(code: Option<i32>, stderr: &str) -> Transport
             "<host>"
         ));
     }
-    let msg = if stderr.is_empty() { format!("ssh exited with {code:?}") } else { stderr.to_string() };
+    let msg = if stderr.is_empty() {
+        match code {
+            Some(c) => format!("ssh failed with exit code {c} and no error message (network down?)"),
+            None => "ssh was terminated".to_string(),
+        }
+    } else {
+        stderr.to_string()
+    };
     TransportError::Connect(msg)
 }
 
@@ -98,8 +109,16 @@ impl Session {
         });
 
         let (tx, rx) = mpsc::channel();
+        let (greet_tx, greeting) = mpsc::channel();
         std::thread::spawn(move || {
             let mut r = BufReader::with_capacity(256 * 1024, stdout);
+            // Skip anything the remote shell printed before the agent started.
+            let greeted = proto::read_greeting(&mut r);
+            let ok = greeted.is_ok();
+            let _ = greet_tx.send(greeted);
+            if !ok {
+                return;
+            }
             loop {
                 let item = proto::read_frame(&mut r);
                 let stop = item.is_err();
@@ -113,6 +132,7 @@ impl Session {
             child,
             writer: Some(BufWriter::with_capacity(256 * 1024, stdin)),
             rx,
+            greeting,
             stderr,
             timeout,
             info: RemoteInfo::default(),
@@ -140,13 +160,48 @@ impl Session {
         }
     }
 
+    /// Waits for the agent's greeting before sending anything, so the remote
+    /// shell's startup files cannot swallow or corrupt protocol data.
+    fn await_greeting(&mut self) -> Result<(), Handshake> {
+        let wait = self.timeout.min(Duration::from_secs(60));
+        match self.greeting.recv_timeout(wait) {
+            Ok(Ok(noise)) => {
+                if !noise.is_empty() {
+                    let text = String::from_utf8_lossy(&noise);
+                    tracing::warn!(
+                        "remote shell printed {} byte(s) before devsync started (ignored): {:?}",
+                        noise.len(),
+                        text.chars().take(200).collect::<String>()
+                    );
+                }
+                Ok(())
+            }
+            Ok(Err(FrameError::TooLarge(n))) => {
+                let _ = self.child.kill();
+                Err(Handshake::Failed(TransportError::Fatal(format!(
+                    "the remote printed {n} bytes without starting the devsync agent; check that your \
+                     shell startup files (~/.bashrc, ~/.profile) don't run programs in non-interactive shells"
+                ))))
+            }
+            Ok(Err(e)) => Err(self.diagnose(TransportError::Disconnected(e.to_string()))),
+            Err(RecvTimeoutError::Timeout) => {
+                let _ = self.child.kill();
+                Err(Handshake::Failed(TransportError::Timeout(wait)))
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                Err(self.diagnose(TransportError::Disconnected("connection closed".into())))
+            }
+        }
+    }
+
     fn handshake(mut self) -> Result<Self, Handshake> {
+        self.await_greeting()?;
         if let Err(e) = self.send(&Request::Hello { version: PROTOCOL_VERSION }) {
             return Err(self.diagnose(e));
         }
         match self.recv() {
             Ok(Response::Hello { agent_version, os, arch, root, .. }) => {
-                self.info = RemoteInfo { os, arch, root, agent_version, agent_name: None };
+                self.info = RemoteInfo { os, arch, root, agent_version, agent_name: None, protocol: PROTOCOL_VERSION };
                 Ok(self)
             }
             Ok(other) => {
@@ -247,7 +302,9 @@ fn ssh_agent_command(ssh: &SshConfig, agent_name: &str, root: &str) -> Command {
 }
 
 fn load_cache(path: Option<&Path>) -> Option<RemoteInfo> {
-    serde_json::from_slice(&std::fs::read(path?).ok()?).ok()
+    let info: RemoteInfo = serde_json::from_slice(&std::fs::read(path?).ok()?).ok()?;
+    // An agent from another protocol version must be replaced, not tried.
+    (info.protocol == PROTOCOL_VERSION).then_some(info)
 }
 
 fn save_cache(path: Option<&Path>, info: &RemoteInfo) {

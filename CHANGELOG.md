@@ -54,6 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Connections no longer break when the remote shell's startup files print
+  text or binary bytes ("frame too large"): the agent now sends a greeting,
+  and the client skips anything before it and sends nothing until it
+  arrives (protocol version 3; the new agent is installed automatically).
+- Remote platform detection and agent upload tolerate shell startup output
+  (including invalid UTF-8), and a truncated upload is detected and retried.
+- A cached agent from an older protocol is replaced instead of being tried.
 - `.devsync.toml` is no longer synced to the remote, and `devsync init` no
   longer creates a `.gitignore` in folders that don't use git.
 - Conflict copies (`*.devsync-remote`) and devsync temp files are never synced.

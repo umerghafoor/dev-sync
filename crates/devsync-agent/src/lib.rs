@@ -51,6 +51,8 @@ impl Agent {
     pub fn serve<R: Read, W: Write>(&self, r: R, w: W) -> Result<(), FrameError> {
         let mut r = BufReader::with_capacity(256 * 1024, r);
         let mut w = BufWriter::with_capacity(256 * 1024, w);
+        w.write_all(proto::GREETING)?;
+        w.flush()?;
         loop {
             let req: Request = match proto::recv(&mut r) {
                 Ok(req) => req,
