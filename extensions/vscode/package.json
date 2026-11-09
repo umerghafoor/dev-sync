@@ -1,14 +1,20 @@
 {
   "name": "devsync",
-  "displayName": "devsync \u2014 Edit Locally, Run Remotely",
-  "description": "Write code on this machine, run it on a remote one. Sync and remote execution that survive flaky connections.",
+  "displayName": "devsync — Edit Locally, Run Remotely",
+  "description": "Write code on this machine, run it on a remote one. A Source Control–style panel for syncing and running commands remotely, built for flaky connections.",
   "version": "0.1.0",
   "publisher": "devsync",
   "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1e3a8a",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
+    "SCM Providers",
     "Other"
   ],
   "keywords": [
@@ -16,7 +22,8 @@
     "ssh",
     "sync",
     "rsync",
-    "offline"
+    "offline",
+    "gpu"
   ],
   "activationEvents": [
     "workspaceContains:**/.devsync.toml",
@@ -25,186 +32,150 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "devsync.menu",
-        "title": "Show Actions",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.init",
-        "title": "Initialize Project\u2026",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.push",
-        "title": "Push Now",
-        "category": "devsync",
-        "icon": "$(cloud-upload)"
-      },
-      {
-        "command": "devsync.toggleWatch",
-        "title": "Start/Stop Auto Sync",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.run",
-        "title": "Run Command Remotely\u2026",
-        "category": "devsync",
-        "icon": "$(play)"
-      },
-      {
-        "command": "devsync.runBackground",
-        "title": "Run Command Remotely in Background\u2026",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.rerun",
-        "title": "Re-run Last Remote Command",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.shell",
-        "title": "Open Remote Shell",
-        "category": "devsync",
-        "icon": "$(terminal)"
-      },
-      {
-        "command": "devsync.forward",
-        "title": "Forward Ports",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.status",
-        "title": "Show Status",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.doctor",
-        "title": "Run Doctor",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.setupClaude",
-        "title": "Set Up Claude Code Integration",
-        "category": "devsync"
-      },
-      {
-        "command": "devsync.collect",
-        "title": "Collect Job Results",
-        "category": "devsync",
-        "icon": "$(cloud-download)"
-      },
-      {
-        "command": "devsync.refreshJobs",
-        "title": "Refresh Jobs",
-        "category": "devsync",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "devsync.openJob",
-        "title": "Open Output",
-        "category": "devsync",
-        "icon": "$(output)"
-      },
-      {
-        "command": "devsync.killJob",
-        "title": "Stop Job",
-        "category": "devsync",
-        "icon": "$(debug-stop)"
-      },
-      {
-        "command": "devsync.rerunJob",
-        "title": "Run Again",
-        "category": "devsync",
-        "icon": "$(debug-rerun)"
-      }
-    ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "devsync",
-          "title": "devsync",
-          "icon": "media/devsync.svg"
-        }
-      ]
-    },
-    "views": {
-      "devsync": [
-        {
-          "id": "devsync.jobs",
-          "name": "Remote Jobs",
-          "when": "devsync.active"
-        }
-      ]
-    },
-    "viewsWelcome": [
-      {
-        "view": "devsync.jobs",
-        "contents": "No remote jobs yet.\n[Run Command Remotely](command:devsync.run)\n[Open Remote Shell](command:devsync.shell)"
-      }
+      { "command": "devsync.menu", "title": "Show Actions", "category": "devsync" },
+      { "command": "devsync.init", "title": "Connect Project to Remote…", "category": "devsync", "icon": "$(plug)" },
+      { "command": "devsync.scmRun", "title": "Run on Remote", "category": "devsync", "icon": "$(play)" },
+      { "command": "devsync.scmRunBackground", "title": "Run on Remote in Background", "category": "devsync", "icon": "$(run-all)" },
+      { "command": "devsync.push", "title": "Push Now", "category": "devsync", "icon": "$(cloud-upload)" },
+      { "command": "devsync.startWatch", "title": "Resume Auto Sync", "category": "devsync", "icon": "$(sync)" },
+      { "command": "devsync.stopWatch", "title": "Pause Auto Sync", "category": "devsync", "icon": "$(debug-pause)" },
+      { "command": "devsync.toggleWatch", "title": "Toggle Auto Sync", "category": "devsync" },
+      { "command": "devsync.refresh", "title": "Refresh", "category": "devsync", "icon": "$(refresh)" },
+      { "command": "devsync.showPanel", "title": "Show Panel", "category": "devsync", "icon": "$(source-control)" },
+      { "command": "devsync.run", "title": "Run Command on Remote…", "category": "devsync", "icon": "$(play)" },
+      { "command": "devsync.rerun", "title": "Run Last Command Again", "category": "devsync", "icon": "$(debug-rerun)" },
+      { "command": "devsync.runBackground", "title": "Run Command on Remote in Background…", "category": "devsync", "icon": "$(run-all)" },
+      { "command": "devsync.shell", "title": "Open Remote Terminal", "category": "devsync", "icon": "$(terminal)" },
+      { "command": "devsync.forward", "title": "Forward Ports", "category": "devsync" },
+      { "command": "devsync.status", "title": "Show Status", "category": "devsync" },
+      { "command": "devsync.doctor", "title": "Run Doctor", "category": "devsync", "icon": "$(pulse)" },
+      { "command": "devsync.setupClaude", "title": "Set Up Claude Code Integration", "category": "devsync" },
+      { "command": "devsync.collect", "title": "Collect Job Results", "category": "devsync", "icon": "$(cloud-download)" },
+      { "command": "devsync.walkthrough", "title": "Getting Started", "category": "devsync", "icon": "$(book)" },
+      { "command": "devsync.openFile", "title": "Open File", "category": "devsync", "icon": "$(go-to-file)" },
+      { "command": "devsync.openJob", "title": "Open Output", "category": "devsync", "icon": "$(output)" },
+      { "command": "devsync.killJob", "title": "Stop Job", "category": "devsync", "icon": "$(debug-stop)" },
+      { "command": "devsync.rerunJob", "title": "Run Again", "category": "devsync", "icon": "$(debug-rerun)" },
+      { "command": "devsync.compareConflict", "title": "Compare Yours ↔ Remote", "category": "devsync", "icon": "$(diff)" },
+      { "command": "devsync.acceptRemote", "title": "Accept Remote Version", "category": "devsync", "icon": "$(check)" },
+      { "command": "devsync.keepLocal", "title": "Keep Your Version", "category": "devsync", "icon": "$(discard)" }
     ],
     "menus": {
-      "view/title": [
-        {
-          "command": "devsync.run",
-          "when": "view == devsync.jobs",
-          "group": "navigation@1"
-        },
-        {
-          "command": "devsync.push",
-          "when": "view == devsync.jobs",
-          "group": "navigation@2"
-        },
-        {
-          "command": "devsync.collect",
-          "when": "view == devsync.jobs",
-          "group": "navigation@3"
-        },
-        {
-          "command": "devsync.refreshJobs",
-          "when": "view == devsync.jobs",
-          "group": "navigation@4"
-        }
+      "scm/title": [
+        { "command": "devsync.scmRun", "when": "scmProvider == devsync", "group": "navigation@1" },
+        { "command": "devsync.push", "when": "scmProvider == devsync", "group": "navigation@2" },
+        { "command": "devsync.stopWatch", "when": "scmProvider == devsync && devsync.watching", "group": "navigation@3" },
+        { "command": "devsync.startWatch", "when": "scmProvider == devsync && !devsync.watching", "group": "navigation@3" },
+        { "command": "devsync.shell", "when": "scmProvider == devsync", "group": "navigation@4" },
+        { "command": "devsync.refresh", "when": "scmProvider == devsync", "group": "navigation@5" },
+        { "command": "devsync.scmRunBackground", "when": "scmProvider == devsync", "group": "1_run@1" },
+        { "command": "devsync.rerun", "when": "scmProvider == devsync", "group": "1_run@2" },
+        { "command": "devsync.collect", "when": "scmProvider == devsync", "group": "2_sync@1" },
+        { "command": "devsync.forward", "when": "scmProvider == devsync", "group": "3_tools@1" },
+        { "command": "devsync.status", "when": "scmProvider == devsync", "group": "3_tools@2" },
+        { "command": "devsync.doctor", "when": "scmProvider == devsync", "group": "3_tools@3" },
+        { "command": "devsync.setupClaude", "when": "scmProvider == devsync", "group": "4_setup@1" },
+        { "command": "devsync.walkthrough", "when": "scmProvider == devsync", "group": "4_setup@2" }
       ],
-      "view/item/context": [
-        {
-          "command": "devsync.openJob",
-          "when": "view == devsync.jobs && viewItem =~ /^job/",
-          "group": "inline@1"
-        },
-        {
-          "command": "devsync.killJob",
-          "when": "view == devsync.jobs && viewItem == job-running",
-          "group": "inline@2"
-        },
-        {
-          "command": "devsync.rerunJob",
-          "when": "view == devsync.jobs && viewItem =~ /^job/",
-          "group": "inline@3"
-        }
+      "scm/resourceGroup/context": [
+        { "command": "devsync.push", "when": "scmProvider == devsync && scmResourceGroup == changes", "group": "inline" },
+        { "command": "devsync.collect", "when": "scmProvider == devsync && scmResourceGroup == jobs", "group": "inline" }
+      ],
+      "scm/resourceState/context": [
+        { "command": "devsync.openFile", "when": "scmProvider == devsync && scmResourceState =~ /^change-(added|modified)$/", "group": "inline" },
+        { "command": "devsync.compareConflict", "when": "scmProvider == devsync && scmResourceState == conflict", "group": "inline@1" },
+        { "command": "devsync.keepLocal", "when": "scmProvider == devsync && scmResourceState == conflict", "group": "inline@2" },
+        { "command": "devsync.acceptRemote", "when": "scmProvider == devsync && scmResourceState == conflict", "group": "inline@3" },
+        { "command": "devsync.compareConflict", "when": "scmProvider == devsync && scmResourceState == conflict", "group": "1_modification@1" },
+        { "command": "devsync.keepLocal", "when": "scmProvider == devsync && scmResourceState == conflict", "group": "1_modification@2" },
+        { "command": "devsync.acceptRemote", "when": "scmProvider == devsync && scmResourceState == conflict", "group": "1_modification@3" },
+        { "command": "devsync.killJob", "when": "scmProvider == devsync && scmResourceState == job-running", "group": "inline@1" },
+        { "command": "devsync.rerunJob", "when": "scmProvider == devsync && scmResourceState =~ /^job-/", "group": "inline@2" },
+        { "command": "devsync.openJob", "when": "scmProvider == devsync && scmResourceState =~ /^job-/", "group": "1_job@1" },
+        { "command": "devsync.rerunJob", "when": "scmProvider == devsync && scmResourceState =~ /^job-/", "group": "1_job@2" },
+        { "command": "devsync.killJob", "when": "scmProvider == devsync && scmResourceState == job-running", "group": "1_job@3" }
+      ],
+      "editor/title/run": [
+        { "command": "devsync.rerun", "when": "devsync.active", "group": "devsync@1" },
+        { "command": "devsync.run", "when": "devsync.active", "group": "devsync@2" }
       ],
       "commandPalette": [
-        {
-          "command": "devsync.openJob",
-          "when": "false"
-        },
-        {
-          "command": "devsync.killJob",
-          "when": "false"
-        },
-        {
-          "command": "devsync.rerunJob",
-          "when": "false"
-        }
+        { "command": "devsync.scmRun", "when": "false" },
+        { "command": "devsync.scmRunBackground", "when": "false" },
+        { "command": "devsync.openFile", "when": "false" },
+        { "command": "devsync.openJob", "when": "false" },
+        { "command": "devsync.killJob", "when": "false" },
+        { "command": "devsync.rerunJob", "when": "false" },
+        { "command": "devsync.compareConflict", "when": "false" },
+        { "command": "devsync.acceptRemote", "when": "false" },
+        { "command": "devsync.keepLocal", "when": "false" },
+        { "command": "devsync.startWatch", "when": "devsync.active && !devsync.watching" },
+        { "command": "devsync.stopWatch", "when": "devsync.active && devsync.watching" }
       ]
     },
+    "keybindings": [
+      { "command": "devsync.rerun", "key": "ctrl+alt+r", "mac": "cmd+alt+r", "when": "devsync.active" }
+    ],
+    "viewsWelcome": [
+      {
+        "view": "scm",
+        "contents": "Run this project's code on a remote machine with devsync.\n[Connect Project to Remote](command:devsync.init)\n[Getting Started](command:devsync.walkthrough)",
+        "when": "!devsync.active && workbenchState != empty"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "devsync.gettingStarted",
+        "title": "Get started with devsync",
+        "description": "Edit here, run on a remote machine — even over a bad connection.",
+        "steps": [
+          {
+            "id": "install",
+            "title": "Install the devsync command",
+            "description": "The extension uses the `devsync` command-line tool. Install it once, then check it works.\n[Run Doctor](command:devsync.doctor)",
+            "media": { "markdown": "media/walkthrough/install.md" }
+          },
+          {
+            "id": "connect",
+            "title": "Connect your project",
+            "description": "Tell devsync where the code should run: `user@host:path`.\n[Connect Project to Remote](command:devsync.init)",
+            "media": { "markdown": "media/walkthrough/connect.md" },
+            "completionEvents": ["onCommand:devsync.init"]
+          },
+          {
+            "id": "panel",
+            "title": "Meet the devsync panel",
+            "description": "It lives in Source Control, next to Git: files not yet on the remote, conflicts, and your remote jobs.\n[Show Panel](command:devsync.showPanel)",
+            "media": { "markdown": "media/walkthrough/panel.md" },
+            "completionEvents": ["onCommand:devsync.showPanel"]
+          },
+          {
+            "id": "run",
+            "title": "Run your first command",
+            "description": "Type a command in the devsync box and press ⌘Enter / Ctrl+Enter. It syncs, runs on the remote, and shows the output.\n[Run Command on Remote](command:devsync.run)",
+            "media": { "markdown": "media/walkthrough/run.md" },
+            "completionEvents": ["onCommand:devsync.run", "onCommand:devsync.scmRun"]
+          },
+          {
+            "id": "background",
+            "title": "Long jobs and results",
+            "description": "Training runs and servers keep going even if the connection drops.\n[Run in Background](command:devsync.runBackground)",
+            "media": { "markdown": "media/walkthrough/background.md" },
+            "completionEvents": ["onCommand:devsync.runBackground", "onCommand:devsync.scmRunBackground"]
+          },
+          {
+            "id": "agents",
+            "title": "Let Claude Code use the remote",
+            "description": "Claude Code's tests, builds and installs run on the remote automatically.\n[Set Up Claude Code](command:devsync.setupClaude)",
+            "media": { "markdown": "media/walkthrough/agents.md" },
+            "completionEvents": ["onCommand:devsync.setupClaude"]
+          }
+        ]
+      }
+    ],
     "terminal": {
       "profiles": [
-        {
-          "id": "devsync.remoteShell",
-          "title": "devsync remote shell",
-          "icon": "remote"
-        }
+        { "id": "devsync.remoteShell", "title": "devsync remote terminal", "icon": "remote" }
       ]
     },
     "configuration": {
@@ -218,12 +189,12 @@
         "devsync.autoSync": {
           "type": "boolean",
           "default": true,
-          "description": "Start auto sync (devsync watch) when a devsync project is opened."
+          "description": "Send every save to the remote automatically (devsync watch) when a devsync project is opened."
         },
         "devsync.openOutputOnBackgroundRun": {
           "type": "boolean",
           "default": true,
-          "description": "Open the job's output file after starting a background command."
+          "description": "Open a background job's output when it starts."
         }
       }
     }

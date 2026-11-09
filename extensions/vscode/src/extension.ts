@@ -1,12 +1,12 @@
-// devsync for VS Code: status bar sync state, auto sync, remote commands in
-// terminals, a Remote Jobs view over the local results folder, and setup
-// helpers. Everything is delegated to the devsync CLI.
+// devsync for VS Code: a Source Control view (like Git) for running code on a
+// remote machine, a status bar with sync state, auto sync, remote terminals
+// and setup helpers. Everything is delegated to the devsync CLI.
 
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { binaryPath, DevsyncEvent, DevsyncNotFound, EventStream, run, runJson, Status } from "./cli";
-import { JobItem, JobsProvider } from "./jobs";
+import { DevsyncResource, DevsyncScm } from "./scm";
 
 const CONFIG_FILE = ".devsync.toml";
 
@@ -14,20 +14,20 @@ type SyncState = "idle" | "pending" | "syncing" | "synced" | "offline" | "error"
 
 class Controller implements vscode.Disposable {
   private root?: string;
+  private scm?: DevsyncScm;
   private readonly status: vscode.StatusBarItem;
   private watch?: EventStream;
-  private jobs?: JobsProvider;
   private readonly disposables: vscode.Disposable[] = [];
-  private collectTimer?: NodeJS.Timeout;
   private restartTimer?: NodeJS.Timeout;
   private restartDelay = 2000;
   private lastSync?: Date;
   private state: SyncState = "stopped";
   private detail = "";
-  private readonly watchedJobs = new Set<string>();
+  private readonly notifyJobs = new Set<string>();
 
   constructor(private readonly ctx: vscode.ExtensionContext, private readonly log: vscode.OutputChannel) {
-    this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
+    this.status = vscode.window.createStatusBarItem("devsync.status", vscode.StatusBarAlignment.Left, 50);
+    this.status.name = "devsync";
     this.status.command = "devsync.menu";
     this.disposables.push(this.status);
   }
@@ -35,18 +35,14 @@ class Controller implements vscode.Disposable {
   async start(): Promise<void> {
     this.registerCommands();
     const root = await this.findRoot();
-    if (root) {
-      this.activate(root);
-    }
+    if (root) this.activate(root);
   }
 
   // ------------------------------------------------------------ project
 
   private async findRoot(): Promise<string | undefined> {
     for (const f of vscode.workspace.workspaceFolders ?? []) {
-      if (fs.existsSync(path.join(f.uri.fsPath, CONFIG_FILE))) {
-        return f.uri.fsPath;
-      }
+      if (fs.existsSync(path.join(f.uri.fsPath, CONFIG_FILE))) return f.uri.fsPath;
     }
     const found = await vscode.workspace.findFiles(`**/${CONFIG_FILE}`, "**/node_modules/**", 1);
     return found[0] ? path.dirname(found[0].fsPath) : undefined;
@@ -56,26 +52,19 @@ class Controller implements vscode.Disposable {
     if (this.root === root) return;
     this.root = root;
     void vscode.commands.executeCommand("setContext", "devsync.active", true);
-    this.jobs = new JobsProvider(root, this.log);
-    this.disposables.push(this.jobs, vscode.window.registerTreeDataProvider("devsync.jobs", this.jobs));
-    void this.jobs.refresh();
+    this.scm = new DevsyncScm(root, this.log);
+    this.disposables.push(this.scm);
     this.status.show();
     this.setState("stopped");
     if (vscode.workspace.getConfiguration("devsync").get<boolean>("autoSync", true)) {
       this.startWatch();
     }
-    // Without the watcher, still collect results of running jobs.
-    this.collectTimer = setInterval(() => {
-      if (this.jobs && this.jobs.runningCount > 0 && !this.watch?.running) {
-        void run(root, ["--quiet", "collect"]).then(() => this.jobs?.scheduleRefresh());
-      }
-    }, 3000);
     this.log.appendLine(`devsync project: ${root} (binary: ${binaryPath()})`);
   }
 
   private requireRoot(): string {
     if (!this.root) {
-      throw new Error("No devsync project in this workspace. Run “devsync: Initialize Project…” first.");
+      throw new Error("No devsync project here yet. Run “devsync: Connect Project to Remote…” first.");
     }
     return this.root;
   }
@@ -95,27 +84,19 @@ class Controller implements vscode.Disposable {
   private setState(state: SyncState, detail = ""): void {
     this.state = state;
     this.detail = detail;
-    const icons: Record<SyncState, string> = {
-      idle: "$(cloud)",
-      pending: "$(circle-filled)",
-      syncing: "$(sync~spin)",
-      synced: "$(check)",
-      offline: "$(cloud-offline)",
-      error: "$(error)",
-      stopped: "$(debug-pause)",
+    const view: Record<SyncState, [string, string]> = {
+      idle: ["$(cloud)", "devsync"],
+      pending: ["$(cloud-upload)", "devsync: changes"],
+      syncing: ["$(sync~spin)", "devsync: syncing"],
+      synced: ["$(check)", "devsync"],
+      offline: ["$(cloud-offline)", "devsync: offline"],
+      error: ["$(error)", "devsync: error"],
+      stopped: ["$(debug-pause)", "devsync: paused"],
     };
-    const labels: Record<SyncState, string> = {
-      idle: "devsync",
-      pending: "devsync: changes",
-      syncing: "devsync: syncing",
-      synced: "devsync",
-      offline: "devsync: offline",
-      error: "devsync: error",
-      stopped: "devsync: paused",
-    };
-    const running = this.jobs?.runningCount ?? 0;
-    this.status.text = `${icons[state]} ${labels[state]}${running ? ` · ${running} running` : ""}`;
-    const tip = new vscode.MarkdownString();
+    const [icon, label] = view[state];
+    const running = this.scm?.runningJobs ?? 0;
+    this.status.text = `${icon} ${label}${running ? ` · $(play) ${running}` : ""}`;
+    const tip = new vscode.MarkdownString(undefined, true);
     tip.appendMarkdown(`**devsync** — ${state}\n\n`);
     if (detail) tip.appendText(`${detail}\n\n`);
     if (this.lastSync) tip.appendMarkdown(`Last sync: ${this.lastSync.toLocaleTimeString()}\n\n`);
@@ -127,6 +108,7 @@ class Controller implements vscode.Disposable {
         : state === "offline"
           ? new vscode.ThemeColor("statusBarItem.warningBackground")
           : undefined;
+    void vscode.commands.executeCommand("setContext", "devsync.watching", !!this.watch?.running);
   }
 
   private onEvent(e: DevsyncEvent): void {
@@ -136,6 +118,7 @@ class Controller implements vscode.Disposable {
         break;
       case "changed":
         this.setState("pending", `${e.paths} change(s) waiting to be sent`);
+        this.scm?.scheduleRefresh();
         break;
       case "planned":
         if (e.upload > 0 || e.delete > 0) this.setState("syncing", `${e.upload} to upload, ${e.delete} to delete`);
@@ -145,26 +128,31 @@ class Controller implements vscode.Disposable {
         this.restartDelay = 2000;
         this.setState("synced", `sent ${e.files} file(s)`);
         this.log.appendLine(`synced ${e.files} file(s), ${e.bytes} bytes, ${e.deleted} deleted in ${e.millis} ms`);
+        this.scm?.scheduleRefresh(0);
         break;
       case "up_to_date":
         this.lastSync = new Date();
         this.setState("synced", "remote is up to date");
+        this.scm?.scheduleRefresh(0);
         break;
       case "retrying":
       case "offline":
-        this.setState("offline", e.event === "offline" ? e.error : e.error);
+        this.setState("offline", e.error);
+        this.scm?.scheduleRefresh();
         break;
       case "pulled":
         this.log.appendLine(`pulled back ${e.path}`);
+        this.scm?.scheduleRefresh();
         break;
       case "conflict":
         void this.showConflict(e.path, e.saved_as);
+        this.scm?.scheduleRefresh(0);
         break;
       case "job_updated":
-        this.jobs?.scheduleRefresh();
+        this.scm?.scheduleRefresh();
         break;
       case "job_finished":
-        this.jobs?.scheduleRefresh();
+        this.scm?.scheduleRefresh(0);
         void this.notifyFinished(e.id, e.state, e.exit_code);
         break;
       case "warning":
@@ -178,18 +166,19 @@ class Controller implements vscode.Disposable {
   }
 
   private async notifyFinished(id: string, state: string, code: number | null): Promise<void> {
-    if (!this.watchedJobs.has(id)) return; // only background jobs started from here
-    this.watchedJobs.delete(id);
+    if (!this.notifyJobs.delete(id)) return; // only background jobs started from here
     const ok = state === "exited" && code === 0;
-    const msg = ok ? `Remote job ${id} finished successfully.` : `Remote job ${id} ${state === "lost" ? "was lost" : `failed (exit ${code})`}.`;
-    const pick = await (ok ? vscode.window.showInformationMessage(msg, "Open Output") : vscode.window.showWarningMessage(msg, "Open Output"));
-    if (pick) this.openOutput(id);
+    const msg = ok
+      ? `Remote job finished successfully.`
+      : `Remote job ${state === "lost" ? "was lost" : `failed (exit ${code})`}.`;
+    const show = ok ? vscode.window.showInformationMessage : vscode.window.showWarningMessage;
+    if (await show(msg, "Open Output")) this.openOutput(id);
   }
 
   private async showConflict(rel: string, savedAs: string): Promise<void> {
     const root = this.requireRoot();
     const pick = await vscode.window.showWarningMessage(
-      `${rel} was changed both here and by a remote command. The remote version was saved as ${savedAs}.`,
+      `${rel} was changed both here and by a remote command. Your version is kept; the remote one is in ${path.basename(savedAs)}.`,
       "Compare",
     );
     if (pick === "Compare") {
@@ -197,7 +186,7 @@ class Controller implements vscode.Disposable {
         "vscode.diff",
         vscode.Uri.file(path.join(root, rel)),
         vscode.Uri.file(path.join(root, savedAs)),
-        `${rel} (local ↔ remote)`,
+        `${rel} (yours ↔ remote)`,
       );
     }
   }
@@ -214,14 +203,12 @@ class Controller implements vscode.Disposable {
       (e) => this.onEvent(e),
       (code, stderr) => {
         const msg = stderr.trim().split("\n").pop() || `exited with ${code}`;
-        this.log.appendLine(`watch stopped: ${msg}`);
+        this.log.appendLine(`auto sync stopped: ${msg}`);
         this.setState("error", msg);
         if (msg.includes("not found")) {
           void this.binaryMissing();
           return;
         }
-        // Restart with backoff; the CLI already handles network errors, so
-        // this only covers crashes and config errors being fixed.
         this.restartTimer = setTimeout(() => this.startWatch(), this.restartDelay);
         this.restartDelay = Math.min(this.restartDelay * 2, 60_000);
       },
@@ -234,12 +221,12 @@ class Controller implements vscode.Disposable {
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.watch?.stop();
     this.watch = undefined;
-    this.setState("stopped", "auto sync is off");
+    this.setState("stopped", "auto sync is off — use Push to send changes");
   }
 
   private async binaryMissing(): Promise<void> {
     const pick = await vscode.window.showErrorMessage(
-      "devsync binary not found. Install it (cargo install --path crates/devsync-cli) or set devsync.binaryPath.",
+      "The devsync command-line tool was not found. Install it (make install in the devsync repo) or set devsync.binaryPath.",
       "Open Settings",
     );
     if (pick) await vscode.commands.executeCommand("workbench.action.openSettings", "devsync.binaryPath");
@@ -264,20 +251,33 @@ class Controller implements vscode.Disposable {
     void this.ctx.workspaceState.update("devsync.lastCwd", cwd);
     const short = command.length > 40 ? `${command.slice(0, 37)}…` : command;
     this.terminal(`devsync: ${short}`, ["exec", "--", command], cwd);
+    this.scm?.scheduleRefresh(1500);
+  }
+
+  private async runInBackground(command: string, cwd: string): Promise<void> {
+    void this.ctx.workspaceState.update("devsync.lastCommand", command);
+    const r = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.SourceControl, title: "Starting remote job" },
+      () => runJson<{ id: string; output: string }>(cwd, ["submit", "--", command], 600_000),
+    );
+    this.notifyJobs.add(r.id);
+    this.scm?.scheduleRefresh(0);
+    if (vscode.workspace.getConfiguration("devsync").get<boolean>("openOutputOnBackgroundRun", true)) {
+      this.openOutput(r.id);
+    }
   }
 
   private openOutput(id: string): void {
-    const root = this.requireRoot();
-    const file = path.join(root, ".devsync", "jobs", id, "output.log");
-    void vscode.window.showTextDocument(vscode.Uri.file(file), { preview: true, preserveFocus: false });
+    const file = path.join(this.requireRoot(), ".devsync", "jobs", id, "output.log");
+    void vscode.window.showTextDocument(vscode.Uri.file(file), { preview: true });
   }
 
   private async askCommand(title: string): Promise<string | undefined> {
     return vscode.window.showInputBox({
       title,
-      prompt: "Runs on the remote in the directory matching the active file (after syncing).",
+      prompt: "Runs on the remote, in the folder of the file you have open (after syncing).",
       value: this.ctx.workspaceState.get<string>("devsync.lastCommand", ""),
-      placeHolder: "e.g. pytest -x  ·  npm test  ·  make",
+      placeHolder: "e.g. pytest -x  ·  npm test  ·  python3 main.py",
       ignoreFocusOut: true,
     });
   }
@@ -291,74 +291,114 @@ class Controller implements vscode.Disposable {
           try {
             await fn(...args);
           } catch (e) {
-            if (e instanceof DevsyncNotFound) {
-              await this.binaryMissing();
-            } else {
-              void vscode.window.showErrorMessage(`devsync: ${e instanceof Error ? e.message : String(e)}`);
-            }
+            if (e instanceof DevsyncNotFound) await this.binaryMissing();
+            else void vscode.window.showErrorMessage(`devsync: ${e instanceof Error ? e.message : String(e)}`);
           }
         }),
       );
 
     reg("devsync.menu", async () => {
-      const items: (vscode.QuickPickItem & { cmd: string })[] = [
-        { label: "$(play) Run command remotely…", cmd: "devsync.run" },
-        { label: "$(debug-rerun) Re-run last command", cmd: "devsync.rerun", description: this.ctx.workspaceState.get("devsync.lastCommand") },
+      const last = this.ctx.workspaceState.get<string>("devsync.lastCommand");
+      const items: (vscode.QuickPickItem & { cmd?: string })[] = [
+        { label: "Run", kind: vscode.QuickPickItemKind.Separator },
+        { label: "$(play) Run command on remote…", cmd: "devsync.run" },
+        { label: "$(debug-rerun) Run again", description: last, cmd: "devsync.rerun" },
         { label: "$(run-all) Run in background…", cmd: "devsync.runBackground" },
-        { label: "$(terminal) Open remote shell", cmd: "devsync.shell" },
+        { label: "$(terminal) Open remote terminal", cmd: "devsync.shell" },
+        { label: "Sync", kind: vscode.QuickPickItemKind.Separator },
         { label: "$(cloud-upload) Push now", cmd: "devsync.push" },
-        { label: this.watch?.running ? "$(debug-pause) Stop auto sync" : "$(sync) Start auto sync", cmd: "devsync.toggleWatch" },
-        { label: "$(cloud-download) Collect job results", cmd: "devsync.collect" },
+        this.watch?.running
+          ? { label: "$(debug-pause) Pause auto sync", cmd: "devsync.stopWatch" }
+          : { label: "$(sync) Resume auto sync", cmd: "devsync.startWatch" },
+        { label: "$(source-control) Show devsync panel", cmd: "devsync.showPanel" },
+        { label: "More", kind: vscode.QuickPickItemKind.Separator },
         { label: "$(plug) Forward ports", cmd: "devsync.forward" },
         { label: "$(info) Status", cmd: "devsync.status" },
         { label: "$(pulse) Doctor", cmd: "devsync.doctor" },
-        { label: "$(sparkle) Set up Claude Code integration", cmd: "devsync.setupClaude" },
+        { label: "$(sparkle) Set up Claude Code", cmd: "devsync.setupClaude" },
+        { label: "$(book) Getting started guide", cmd: "devsync.walkthrough" },
       ];
-      const pick = await vscode.window.showQuickPick(items, { title: `devsync — ${this.state}${this.detail ? `: ${this.detail}` : ""}` });
-      if (pick) await vscode.commands.executeCommand(pick.cmd);
+      const pick = await vscode.window.showQuickPick(items, {
+        title: `devsync — ${this.state}${this.detail ? `: ${this.detail}` : ""}`,
+      });
+      if (pick?.cmd) await vscode.commands.executeCommand(pick.cmd);
     });
 
     reg("devsync.init", async () => {
       const folder = vscode.workspace.workspaceFolders?.[0];
-      if (!folder) throw new Error("Open a folder first.");
+      if (!folder) throw new Error("Open your project folder first (File → Open Folder…).");
       const target = await vscode.window.showInputBox({
-        title: "devsync: remote target",
-        prompt: "user@host:/path/on/remote  (an ~/.ssh/config alias works as host; ~ is the remote home)",
-        placeHolder: "me@devbox:~/projects/" + path.basename(folder.uri.fsPath),
+        title: "Connect this project to a remote machine",
+        prompt: "user@host:path — the host can be an alias from ~/.ssh/config; ~ means the remote home folder",
+        placeHolder: `me@devbox:~/${path.basename(folder.uri.fsPath)}`,
         ignoreFocusOut: true,
-        validateInput: (v) => (/^[^:\s]+:\S+$/.test(v.trim()) ? undefined : "Expected host:path"),
+        validateInput: (v) => (/^[^:\s]+:\S+$/.test(v.trim()) ? undefined : "Use the form user@host:path"),
       });
       if (!target) return;
       const r = await run(folder.uri.fsPath, ["init", target.trim()]);
       if (r.code !== 0) throw new Error(r.stderr.trim());
       this.activate(folder.uri.fsPath);
       const pick = await vscode.window.showInformationMessage(
-        "devsync is set up. Coding agents can run commands on the remote too.",
-        "Set Up Claude Code",
+        "Project connected. Run the doctor to check the connection?",
         "Run Doctor",
+        "Later",
       );
-      if (pick === "Set Up Claude Code") await vscode.commands.executeCommand("devsync.setupClaude");
       if (pick === "Run Doctor") await vscode.commands.executeCommand("devsync.doctor");
+    });
+
+    reg("devsync.scmRun", async () => {
+      const input = this.scm?.input;
+      const cmd = input?.value.trim();
+      if (!input) return;
+      if (!cmd) {
+        void vscode.window.showInformationMessage("Type a command in the devsync box first, e.g. pytest");
+        return;
+      }
+      input.value = "";
+      this.runInTerminal(cmd, this.activeDir());
+    });
+
+    reg("devsync.scmRunBackground", async () => {
+      const input = this.scm?.input;
+      const cmd = input?.value.trim();
+      if (!input || !cmd) {
+        await vscode.commands.executeCommand("devsync.runBackground");
+        return;
+      }
+      input.value = "";
+      await this.runInBackground(cmd, this.activeDir());
     });
 
     reg("devsync.push", async () => {
       const root = this.requireRoot();
       await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: "devsync: pushing…", cancellable: false },
+        { location: vscode.ProgressLocation.SourceControl, title: "Pushing to remote" },
         async () => {
           const r = await run(root, ["push"], 600_000);
           if (r.code !== 0) throw new Error(r.stderr.trim().split("\n").pop());
           this.lastSync = new Date();
-          this.setState("synced", r.stderr.trim().split("\n").pop() ?? "");
+          this.setState(this.watch?.running ? "synced" : "stopped", r.stderr.trim().split("\n").pop() ?? "");
         },
       );
+      this.scm?.scheduleRefresh(0);
     });
 
+    reg("devsync.startWatch", () => this.startWatch());
+    reg("devsync.stopWatch", () => this.stopWatch());
     reg("devsync.toggleWatch", () => (this.watch?.running ? this.stopWatch() : this.startWatch()));
+    reg("devsync.refresh", () => this.scm?.refresh());
+    reg("devsync.showPanel", () => vscode.commands.executeCommand("workbench.view.scm"));
+    reg("devsync.walkthrough", () =>
+      vscode.commands.executeCommand(
+        "workbench.action.openWalkthrough",
+        `${this.ctx.extension.id}#devsync.gettingStarted`,
+        false,
+      ),
+    );
 
     reg("devsync.run", async () => {
       const cwd = this.activeDir();
-      const cmd = await this.askCommand("Run command remotely");
+      const cmd = await this.askCommand("Run on remote");
       if (cmd?.trim()) this.runInTerminal(cmd.trim(), cwd);
     });
 
@@ -373,19 +413,11 @@ class Controller implements vscode.Disposable {
 
     reg("devsync.runBackground", async () => {
       const cwd = this.activeDir();
-      const cmd = await this.askCommand("Run command remotely in the background");
-      if (!cmd?.trim()) return;
-      void this.ctx.workspaceState.update("devsync.lastCommand", cmd.trim());
-      const r = await runJson<{ id: string; output: string }>(cwd, ["submit", "--", cmd.trim()], 600_000);
-      this.watchedJobs.add(r.id);
-      this.jobs?.scheduleRefresh();
-      if (vscode.workspace.getConfiguration("devsync").get<boolean>("openOutputOnBackgroundRun", true)) {
-        this.openOutput(r.id);
-      }
-      void vscode.window.setStatusBarMessage(`devsync: started job ${r.id}`, 4000);
+      const cmd = await this.askCommand("Run on remote in the background");
+      if (cmd?.trim()) await this.runInBackground(cmd.trim(), cwd);
     });
 
-    reg("devsync.shell", () => this.terminal("devsync: remote shell", ["shell"], this.activeDir()));
+    reg("devsync.shell", () => this.terminal("devsync: remote terminal", ["shell"], this.activeDir()));
     reg("devsync.forward", () => this.terminal("devsync: ports", ["forward"], this.requireRoot()));
     reg("devsync.doctor", () => this.terminal("devsync: doctor", ["doctor"], this.requireRoot()));
 
@@ -396,46 +428,53 @@ class Controller implements vscode.Disposable {
         : `link down: ${s.error}`;
       const msg = `${s.host}:${s.path} — ${link}. ${s.pending} change(s) pending, ${s.running_jobs} job(s) running.`;
       this.log.appendLine(JSON.stringify(s, null, 2));
-      void vscode.window.showInformationMessage(msg, "Show Details").then((p) => p && this.log.show());
+      if (await vscode.window.showInformationMessage(msg, "Details")) this.log.show();
     });
 
     reg("devsync.setupClaude", async () => {
       const r = await run(this.requireRoot(), ["setup", "claude"]);
       if (r.code !== 0) throw new Error(r.stderr.trim());
       void vscode.window.showInformationMessage(
-        "Claude Code will now run code-executing commands on the remote. Restart Claude Code sessions to load the hook.",
+        "Claude Code will now run tests, builds and installs on the remote. Restart Claude Code sessions to load the hook.",
       );
     });
 
     reg("devsync.collect", async () => {
       await run(this.requireRoot(), ["--quiet", "collect"], 120_000);
-      await this.jobs?.refresh();
+      await this.scm?.refresh();
     });
 
-    reg("devsync.refreshJobs", () => this.jobs?.refresh());
-
-    reg("devsync.openJob", (item?: JobItem | string) => {
-      const id = typeof item === "string" ? item : item?.job.id;
-      if (id) this.openOutput(id);
+    // Resource actions (from the Source Control view).
+    reg("devsync.openJob", (r?: DevsyncResource) => r?.job && this.openOutput(r.job.id));
+    reg("devsync.killJob", async (r?: DevsyncResource) => {
+      if (!r?.job) return;
+      await run(this.requireRoot(), ["kill", r.job.id]);
+      this.scm?.scheduleRefresh(0);
     });
-
-    reg("devsync.killJob", async (item?: JobItem) => {
-      if (!item) return;
-      await run(this.requireRoot(), ["kill", item.job.id]);
-      await this.jobs?.refresh();
-    });
-
-    reg("devsync.rerunJob", (item?: JobItem) => {
-      if (!item) return;
+    reg("devsync.rerunJob", (r?: DevsyncResource) => {
+      if (!r?.job) return;
       const root = this.requireRoot();
-      this.runInTerminal(item.job.command, item.job.cwd ? path.join(root, item.job.cwd) : root);
+      this.runInTerminal(r.job.command, r.job.cwd ? path.join(root, r.job.cwd) : root);
     });
+    reg("devsync.compareConflict", async (r?: DevsyncResource) => {
+      if (!r?.remoteCopy) return;
+      const rel = path.relative(this.requireRoot(), r.file);
+      await vscode.commands.executeCommand(
+        "vscode.diff",
+        vscode.Uri.file(r.file),
+        vscode.Uri.file(r.remoteCopy),
+        `${rel} (yours ↔ remote)`,
+      );
+    });
+    reg("devsync.acceptRemote", async (r?: DevsyncResource) => r && this.scm?.acceptRemote(r));
+    reg("devsync.keepLocal", async (r?: DevsyncResource) => r && this.scm?.keepLocal(r));
+    reg("devsync.openFile", (r?: DevsyncResource) => r && vscode.window.showTextDocument(vscode.Uri.file(r.file)));
 
     this.disposables.push(
       vscode.window.registerTerminalProfileProvider("devsync.remoteShell", {
         provideTerminalProfile: () =>
           new vscode.TerminalProfile({
-            name: "devsync remote shell",
+            name: "devsync remote terminal",
             shellPath: binaryPath(),
             shellArgs: ["shell"],
             cwd: this.root,
@@ -443,7 +482,7 @@ class Controller implements vscode.Disposable {
           }),
       }),
       vscode.window.onDidCloseTerminal((t) => {
-        if (t.name.startsWith("devsync:")) this.jobs?.scheduleRefresh();
+        if (t.name.startsWith("devsync:")) this.scm?.scheduleRefresh(0);
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("devsync.binaryPath") && this.watch?.running) {
@@ -461,7 +500,6 @@ class Controller implements vscode.Disposable {
   }
 
   dispose(): void {
-    if (this.collectTimer) clearInterval(this.collectTimer);
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.watch?.dispose();
     for (const d of this.disposables) d.dispose();
@@ -473,6 +511,14 @@ export function activate(ctx: vscode.ExtensionContext): void {
   const controller = new Controller(ctx, log);
   ctx.subscriptions.push(log, controller);
   void controller.start();
+  if (!ctx.globalState.get("devsync.welcomed")) {
+    void ctx.globalState.update("devsync.welcomed", true);
+    void vscode.commands.executeCommand(
+      "workbench.action.openWalkthrough",
+      `${ctx.extension.id}#devsync.gettingStarted`,
+      false,
+    );
+  }
 }
 
 export function deactivate(): void {
