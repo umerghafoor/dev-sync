@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- VS Code: a Source Control provider that works like Git's view: a command
+  box (⌘Enter runs on the remote), "Not on remote yet" with A/M/D badges,
+  conflicts with compare / keep yours / accept remote, and remote jobs with
+  ✓/✗ status, stop and run-again actions.
+- VS Code: Getting Started walkthrough, run/re-run in the editor title bar,
+  ⌘⌥R / Ctrl+Alt+R to re-run, extension icon.
+- `devsync changes`: git-status-like list of local changes not yet on the
+  remote (`--json` supported).
+- Project logo.
+
+### Changed
+
+- VS Code: the separate "Remote Jobs" sidebar is replaced by the Source
+  Control panel.
+
+### Fixed
+
+- Conflict copies (`*.devsync-remote`) and devsync temp files are never synced.
+- VS Code: the CLI is found in `~/.local/bin` even when the editor does not
+  inherit the shell `PATH`.
+
 ## [0.1.0] - 2026-11-09
 
 First public release.

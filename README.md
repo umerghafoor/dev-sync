@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/src/assets/logo.svg" alt="devsync logo" width="96" height="96">
+
 # devsync
 
 **Edit locally, run remotely.**<br>
@@ -112,9 +114,22 @@ local. See [Coding agents](docs/src/guide/coding-agents.md).
 
 ## VS Code
 
-Download `devsync-<version>.vsix` from a release (or run `make vscode`), then
-use **Extensions → ⋯ → Install from VSIX…** in VS Code. See the
-[extension README](extensions/vscode/README.md).
+<img align="right" src="docs/src/assets/vscode-panel.svg" alt="The devsync panel in VS Code's Source Control view" width="330">
+
+A **devsync panel in Source Control**, next to Git:
+
+- type a command and press **⌘Enter** to run it on the remote, like a commit;
+- **Not on remote yet**: files waiting to be sent (**A**/**M**/**D**);
+- **Conflicts**, with compare / keep yours / accept remote;
+- **Remote jobs**, marked ✓ / ✗ / …; click one to open its output;
+- status bar: ✓ synced · ☁ offline · ⏸ paused;
+- a Getting Started walkthrough inside VS Code.
+
+Install: download `devsync-<version>.vsix` from a release (or run
+`make vscode`), then **Extensions → ⋯ → Install from VSIX…**. Guide:
+[VS Code extension](docs/src/guide/vscode.md).
+
+<br clear="right">
 
 ## How it works
 

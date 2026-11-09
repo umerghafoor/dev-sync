@@ -1,57 +1,75 @@
 # VS Code extension
 
-The extension is a thin UI over the `devsync` CLI, so the editor, the
-terminal and coding agents all share one sync engine and one results folder.
-Install it as described in [Installation](../installation.md#vs-code-extension).
+The extension adds a **devsync panel to Source Control** that works like
+Git's: type a command where you'd write a commit message, press ⌘Enter, and
+it runs on the remote. It is a thin UI over the `devsync` CLI, so the editor,
+your terminal and coding agents all share one sync engine and one results
+folder.
+
+<p align="center"><img src="../assets/vscode-panel.svg" alt="The devsync panel in VS Code's Source Control view: a command box, files not yet on the remote marked M and A, a conflict, and remote jobs marked running, succeeded and failed." width="440"></p>
+
+## Install
+
+1. Install the CLI (see [Installation](../installation.md)). The extension
+   finds `devsync` on `PATH`, in `~/.local/bin` or in `~/.cargo/bin`.
+2. In VS Code: **Extensions** (⇧⌘X) → **⋯** → **Install from VSIX…** →
+   choose `devsync-<version>.vsix` (from a release, or `make vscode`).
+3. A **Get started with devsync** walkthrough opens; it is also under
+   Help → Welcome.
+
+## Connect a project
+
+Open the project folder, then run **devsync: Connect Project to Remote…**
+(also offered in the Source Control view) and enter `you@server:~/myproject`.
+Accept **Run Doctor** to check the connection; it also installs devsync's
+helper on the remote.
+
+## The devsync panel
+
+Open **Source Control** (⌃⇧G). The devsync section has:
+
+| Part | What it's for |
+| --- | --- |
+| **Command box** | Type a command, press **⌘Enter / Ctrl+Enter**: it syncs, then runs in a terminal on the remote, in the folder of the file you have open |
+| **Not on remote yet** | Local changes not sent yet, marked **A** (added), **M** (modified), **D** (deleted, when `sync.delete` is on). Click to open. With auto sync this list empties a moment after you save; when offline it shows what's queued |
+| **Conflicts** | A remote command changed a file you also edited. Your file is kept; the remote version is next to it. Buttons: **⇄ Compare**, **↩ Keep yours**, **✓ Accept remote** |
+| **Remote jobs** | The last 20 commands, marked **✓** (exit 0), **✗** (failed), **…** (running), **?** (lost). Click to open the output; **■** stops a running job, **↻** runs it again |
+
+**Toolbar:** ▶ run · ☁ push now · ⏸ pause / ⟳ resume auto sync ·
+terminal · refresh. Under **⋯**: run in background, run again, collect
+results, forward ports, status, doctor, Claude Code setup, Getting Started.
 
 ## Status bar
 
 | Shows | Meaning |
 | --- | --- |
 | `✓ devsync` | Remote matches your files |
-| `● devsync: changes` | Saved changes waiting to be sent |
+| `☁↑ devsync: changes` | Saved changes about to be sent |
 | `⟳ devsync: syncing` | Sending |
-| `☁ devsync: offline` | Can't reach the remote; changes are queued and retried |
-| `⏸ devsync: paused` | Auto sync is off |
-| `· 2 running` | Number of remote jobs still running |
+| `☁ devsync: offline` | Can't reach the remote; changes are queued and retried (yellow) |
+| `⏸ devsync: paused` | Auto sync is off; use Push |
+| `· ▶ 2` | Two remote jobs running |
 
-Click it for the action menu.
+Click it for a menu with every action.
 
-## Commands
+## Running things
 
-All commands are in the command palette under **devsync:**.
-
-| Command | What it does |
-| --- | --- |
-| Run Command Remotely… | Syncs, then runs a command in a terminal on the remote, in the directory of the active file |
-| Re-run Last Remote Command | |
-| Run Command Remotely in Background… | Starts a job and opens its `output.log`, which fills in as the job runs |
-| Open Remote Shell | Interactive shell on the remote (also available as the *devsync remote shell* terminal profile) |
-| Push Now / Start/Stop Auto Sync | |
-| Collect Job Results | Fetch output of running jobs now |
-| Forward Ports | Runs `devsync forward` for `exec.ports` |
-| Show Status / Run Doctor | |
-| Initialize Project… | Creates `.devsync.toml` |
-| Set Up Claude Code Integration | Runs `devsync setup claude` |
-
-## Remote Jobs view
-
-The devsync icon in the activity bar lists jobs, newest first, with state and
-exit code. Click a job to open its output file. Inline actions: stop
-(running jobs) and run again.
-
-## Conflicts
-
-If a remote command changes a file you also edited, a notification offers
-**Compare**, which opens a diff of your version against the remote one
-(`<file>.devsync-remote`).
+- **Quick runs** go through the command box. **⌘⌥R / Ctrl+Alt+R** (or ▶ in
+  the editor title bar) re-runs the last command; bind it to any key you like.
+- **Long runs**: ⋯ → **Run on Remote in Background**. The job runs without
+  holding a connection. Its output file opens and fills in as it runs, and
+  you're notified when it finishes.
+- **Remote terminal**: the terminal button, or the *devsync remote terminal*
+  profile in the terminal **+ ▾** menu.
+- **Ports**: ⋯ → **Forward Ports** exposes `exec.ports` on localhost.
 
 ## Settings
 
 | Setting | Default | |
 | --- | --- | --- |
 | `devsync.binaryPath` | `""` | Path to `devsync`. Empty: searches `PATH`, `~/.local/bin`, `~/.cargo/bin`, `/usr/local/bin`, `/opt/homebrew/bin` |
-| `devsync.autoSync` | `true` | Start auto sync when a devsync project is opened |
+| `devsync.autoSync` | `true` | Send every save automatically when a devsync project opens |
 | `devsync.openOutputOnBackgroundRun` | `true` | Open a background job's output when it starts |
 
-The extension activates in any workspace containing a `.devsync.toml`.
+The extension activates in any workspace containing a `.devsync.toml`. Logs
+are under View → Output → **devsync**.

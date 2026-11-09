@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" alt="" width="72" align="right">
+
 # devsync
 
 **Edit locally, run remotely.**
