@@ -77,11 +77,14 @@ fn pid_alive(pid: i32) -> bool {
     r == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
+/// Sortable, unique-enough id: start time in milliseconds plus a salt.
 fn new_id() -> String {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let ns = now_ns();
-    let secs = ns / 1_000_000_000;
-    let salt = (ns as u64 ^ (std::process::id() as u64).rotate_left(17)) & 0xffff;
-    format!("{secs}-{salt:04x}")
+    let millis = ns / 1_000_000;
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let salt = ((ns as u64) ^ (std::process::id() as u64).rotate_left(17) ^ seq.rotate_left(40)) & 0xffff;
+    format!("{millis}-{salt:04x}")
 }
 
 pub fn start(root: &Path, state: &Path, spec: &JobSpec) -> Result<Response, String> {

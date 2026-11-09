@@ -67,7 +67,7 @@ impl HashCache {
             .old
             .items
             .get(rel)
-            .map_or(true, |o| o.size != size || o.mtime_ns != mtime_ns || o.hash != hash);
+            .is_none_or(|o| o.size != size || o.mtime_ns != mtime_ns || o.hash != hash);
         self.dirty |= changed;
         self.new.insert(rel.to_string(), Item { size, mtime_ns, hash });
     }

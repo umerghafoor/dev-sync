@@ -36,7 +36,7 @@ pub fn plan(src: &[Entry], dst: &[Entry], delete: bool) -> Plan {
     let dst_map: HashMap<&str, &Entry> = dst.iter().map(|e| (e.path.as_str(), e)).collect();
     let upload = src
         .iter()
-        .filter(|s| dst_map.get(s.path.as_str()).map_or(true, |d| !same(s, d)))
+        .filter(|s| dst_map.get(s.path.as_str()).is_none_or(|d| !same(s, d)))
         .cloned()
         .collect();
     let delete = if delete {

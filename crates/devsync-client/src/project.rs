@@ -74,9 +74,18 @@ impl Project {
     }
 
     /// Runs `op` with the project's retry policy, reporting retries.
-    pub fn with_retry<T>(&self, rep: &dyn Reporter, mut op: impl FnMut() -> Result<T>) -> Result<T> {
+    pub fn with_retry<T>(&self, rep: &dyn Reporter, op: impl FnMut() -> Result<T>) -> Result<T> {
+        self.with_retry_policy(self.retry_policy(), rep, op)
+    }
+
+    pub fn with_retry_policy<T>(
+        &self,
+        policy: RetryPolicy,
+        rep: &dyn Reporter,
+        mut op: impl FnMut() -> Result<T>,
+    ) -> Result<T> {
         devsync_transport::retry(
-            &self.retry_policy(),
+            &policy,
             |attempt, e: &ClientError, delay| {
                 rep.event(Event::Retrying { attempt, error: e.to_string(), delay_ms: delay.as_millis() as u64 })
             },

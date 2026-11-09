@@ -1,0 +1,29 @@
+[package]
+name = "devsync-cli"
+description = "devsync: edit locally, run remotely — sync and remote execution built for flaky connections"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "devsync"
+path = "src/main.rs"
+
+[dependencies]
+devsync-proto.workspace = true
+devsync-fs.workspace = true
+devsync-agent.workspace = true
+devsync-transport.workspace = true
+devsync-client.workspace = true
+clap.workspace = true
+clap_complete = "4"
+anyhow.workspace = true
+serde_json.workspace = true
+notify-debouncer-mini.workspace = true
+ctrlc.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+serde_json.workspace = true

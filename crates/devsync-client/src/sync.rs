@@ -238,7 +238,17 @@ impl TapSetAll for Snapshot {
 
 /// Makes the remote tree match the local one.
 pub fn push(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushStats> {
-    p.with_retry(rep, || push_once(p, rep, opts))
+    push_with(p, rep, opts, p.retry_policy())
+}
+
+/// [`push`] with an explicit retry policy (e.g. single attempt for `watch`).
+pub fn push_with(
+    p: &Project,
+    rep: &dyn Reporter,
+    opts: PushOptions,
+    policy: devsync_transport::RetryPolicy,
+) -> Result<PushStats> {
+    p.with_retry_policy(policy, rep, || push_once(p, rep, opts))
 }
 
 /// Downloads remote `e` to `dest` (verified, atomic).

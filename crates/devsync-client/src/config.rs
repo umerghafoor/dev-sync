@@ -6,7 +6,7 @@ use std::path::Path;
 
 pub const CONFIG_FILE: &str = ".devsync.toml";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub remote: RemoteConfig,
@@ -15,7 +15,7 @@ pub struct Config {
     pub exec: ExecConfig,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RemoteConfig {
     /// `user@host`, an ssh alias, or `local` (agent on this machine).
@@ -70,23 +70,6 @@ pub struct ExecConfig {
     pub remote_commands: Vec<String>,
     /// Delay between output polls while a job runs (adaptive up to 4x).
     pub poll_interval_ms: u64,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            remote: RemoteConfig::default(),
-            ssh: SshSection::default(),
-            sync: SyncConfig::default(),
-            exec: ExecConfig::default(),
-        }
-    }
-}
-
-impl Default for RemoteConfig {
-    fn default() -> Self {
-        Self { host: String::new(), path: String::new() }
-    }
 }
 
 impl Default for SshSection {
