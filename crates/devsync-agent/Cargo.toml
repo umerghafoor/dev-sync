@@ -1,0 +1,18 @@
+[package]
+name = "devsync-agent"
+description = "Remote side of devsync: file transfer endpoint and detached job runner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+devsync-proto.workspace = true
+devsync-fs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+lz4_flex.workspace = true
+libc.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
