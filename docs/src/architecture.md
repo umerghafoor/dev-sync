@@ -38,7 +38,7 @@ errors are fatal and reported at once.
 
 ## Protocol (`devsync-proto`)
 
-Frames are a 4-byte big-endian length followed by a bincode payload (64 MiB
+Frames are a 4-byte big-endian length followed by a postcard payload (64 MiB
 max). The client sends `Request`s and the agent answers each with one
 `Response`, in order. Uploads are pipelined: up to 32 requests in flight
 before waiting for acknowledgements, which is safe because acknowledgements
@@ -63,7 +63,7 @@ content-addressed, so client and agent always come from the same build.
   (e.g. the file changed mid-upload) is reported as retryable. Ancestors that
   are files are replaced by directories and vice versa. Symlinks are
   recreated, never followed.
-- **Snapshot.** After a push, `.devsync/synced.bin` records the hash of every
+- **Snapshot.** After a push, `.devsync/synced.v2.bin` records the hash of every
   file as the remote now has it. This is what makes pull-back safe.
 
 ## Jobs (`devsync-agent::jobs`, `devsync-client::jobs`)

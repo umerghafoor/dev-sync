@@ -29,7 +29,7 @@ Source Control view. Built for connections that drop.
 ## Setup
 
 1. **Install the `devsync` command** (once):
-   `curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh`
+   `curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh`
    (or `sh install.sh` in a source checkout). This puts it in `~/.local/bin`,
    which the extension finds automatically. If VS Code's `code` command is
    available, the installer installs this extension too.

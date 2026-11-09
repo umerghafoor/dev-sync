@@ -4,6 +4,7 @@ description = "devsync: edit locally, run remotely — sync and remote execution
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true

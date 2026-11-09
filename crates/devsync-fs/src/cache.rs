@@ -44,7 +44,7 @@ impl HashCache {
     /// Loads the cache from `file`; a missing or corrupt file yields an empty cache.
     pub fn load(file: impl Into<PathBuf>) -> Self {
         let file = file.into();
-        let old = std::fs::read(&file).ok().and_then(|b| bincode::deserialize::<Data>(&b).ok()).unwrap_or_default();
+        let old = std::fs::read(&file).ok().and_then(|b| postcard::from_bytes::<Data>(&b).ok()).unwrap_or_default();
         Self { file: Some(file), old, new: HashMap::new(), dirty: false }
     }
 
@@ -71,7 +71,7 @@ impl HashCache {
             return;
         }
         let data = Data { written_at_ns: now_ns(), items: std::mem::take(&mut self.new) };
-        if let Ok(bytes) = bincode::serialize(&data) {
+        if let Ok(bytes) = postcard::to_allocvec(&data) {
             let _ = write_atomic(file, &bytes);
         }
         self.old = data;

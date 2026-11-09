@@ -4,6 +4,7 @@ description = "Tree scanning, ignore rules, content hashing and sync planning fo
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -14,7 +15,7 @@ categories.workspace = true
 [dependencies]
 devsync-proto.workspace = true
 serde.workspace = true
-bincode.workspace = true
+postcard.workspace = true
 blake3.workspace = true
 ignore.workspace = true
 thiserror.workspace = true

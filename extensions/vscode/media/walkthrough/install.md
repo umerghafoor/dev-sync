@@ -5,7 +5,7 @@ The extension is a front end for the `devsync` command-line tool.
 **One line** (macOS and Linux):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh
 ```
 
 **Or from source** (needs Rust):

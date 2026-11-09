@@ -1,8 +1,8 @@
 #!/bin/sh
 # devsync installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh -s -- --version 0.2.0
+#   curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh -s -- --version 0.2.0
 #   sh install.sh            (inside a release archive or a source checkout)
 #   sh install.sh --uninstall
 #
@@ -24,7 +24,7 @@
 
 set -eu
 
-REPO=${DEVSYNC_REPO:-OWNER/devsync}
+REPO=${DEVSYNC_REPO:-umerghafoor/dev-sync}
 PREFIX=${PREFIX:-"$HOME/.local"}
 VERSION=${DEVSYNC_VERSION:-latest}
 MODIFY_PATH=1
@@ -287,6 +287,8 @@ if [ "$on_path" = 0 ]; then
         elif [ "$(basename "$rc")" = devsync.fish ]; then
             printf 'fish_add_path "%s" %s\n' "$BIN_DIR" "$RC_MARKER" > "$rc"
         else
+            # $PATH must stay literal: it is expanded when the rc file is sourced.
+            # shellcheck disable=SC2016
             printf '\nexport PATH="%s:$PATH" %s\n' "$BIN_DIR" "$RC_MARKER" >> "$rc"
         fi
         ok "added $BIN_DIR to PATH in $rc"

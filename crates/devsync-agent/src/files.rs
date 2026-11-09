@@ -16,7 +16,7 @@ fn partial(state: &Path, hash: &Hash) -> PathBuf {
 }
 
 pub fn manifest(root: &Path, state: &Path, ignore: &IgnoreSpec) -> Result<Response, String> {
-    let mut cache = HashCache::load(state.join("hash-cache.bin"));
+    let mut cache = HashCache::load(state.join("hash-cache.v2.bin"));
     devsync_fs::scan(root, ignore, &mut cache).map(Response::Manifest).map_err(|e| e.to_string())
 }
 

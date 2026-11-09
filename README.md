@@ -7,12 +7,12 @@
 **Edit locally, run remotely.**<br>
 Sync and remote execution for flaky connections, for you and your coding agent.
 
-[![CI](https://github.com/OWNER/devsync/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/devsync/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/OWNER/devsync?sort=semver)](https://github.com/OWNER/devsync/releases)
-[![Docs](https://img.shields.io/badge/docs-online-blue)](https://OWNER.github.io/devsync/)
+[![CI](https://github.com/umerghafoor/dev-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/umerghafoor/dev-sync/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/umerghafoor/dev-sync?sort=semver)](https://github.com/umerghafoor/dev-sync/releases)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://umerghafoor.github.io/dev-sync/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-[Documentation](https://OWNER.github.io/devsync/) ·
+[Documentation](https://umerghafoor.github.io/dev-sync/) ·
 [Quick start](#quick-start) ·
 [VS Code extension](extensions/vscode/README.md) ·
 [Changelog](CHANGELOG.md) ·
@@ -61,7 +61,7 @@ Requirements: ssh access to the remote without a password prompt
 **Install** (macOS and Linux):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh
 ```
 
 The installer downloads the latest release for your machine, verifies its
@@ -69,7 +69,7 @@ checksum, installs to `~/.local/bin`, adds it to your `PATH`, and installs the
 VS Code extension if `code` is available. Or build from source (Rust 1.88+):
 
 ```bash
-git clone https://github.com/OWNER/devsync.git
+git clone https://github.com/umerghafoor/dev-sync.git
 cd devsync
 sh install.sh
 ```
@@ -101,7 +101,7 @@ devsync exec -- pytest -x
 | `devsync status` | Link state, pending changes, running jobs |
 | `devsync setup claude` | Route Claude Code's commands to the remote |
 
-Full guide: **[documentation](https://OWNER.github.io/devsync/)** (also
+Full guide: **[documentation](https://umerghafoor.github.io/dev-sync/)** (also
 readable in [`docs/src`](docs/src/SUMMARY.md)).
 
 ## Coding agents
@@ -139,7 +139,7 @@ Install: download `devsync-<version>.vsix` from a release (or run
 
 | Crate | Role |
 | --- | --- |
-| [`devsync-proto`](crates/devsync-proto) | Framed bincode protocol shared by both sides |
+| [`devsync-proto`](crates/devsync-proto) | Framed postcard protocol shared by both sides |
 | [`devsync-fs`](crates/devsync-fs) | Ignore rules, hashing with cache, sync planning, atomic writes |
 | [`devsync-agent`](crates/devsync-agent) | Remote endpoint: transfers and detached job supervisor |
 | [`devsync-transport`](crates/devsync-transport) | Short ssh/local sessions, agent deployment, retry/backoff |

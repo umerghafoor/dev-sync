@@ -1,7 +1,7 @@
 //! Wire protocol between the devsync client and the remote agent.
 //!
 //! Transport is any byte stream (ssh stdio, a local pipe). Every message is a
-//! frame: a 4-byte big-endian length followed by a bincode-encoded payload.
+//! frame: a 4-byte big-endian length followed by a postcard-encoded payload.
 //! The client sends [`Request`]s; the agent answers each with exactly one
 //! [`Response`], in order. Sessions are deliberately short-lived: a client
 //! opens a session, performs one operation, and closes it, so nothing depends
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
 /// Bumped on any incompatible change to the messages below.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// Upper bound for a single frame; protects both sides from garbage input.
 pub const MAX_FRAME: usize = 64 * 1024 * 1024;
@@ -171,15 +171,15 @@ pub enum FrameError {
     #[error("i/o: {0}")]
     Io(#[from] io::Error),
     #[error("decode: {0}")]
-    Codec(#[from] bincode::Error),
+    Codec(#[from] postcard::Error),
 }
 
 pub fn encode<T: Serialize>(msg: &T) -> Result<Vec<u8>, FrameError> {
-    Ok(bincode::serialize(msg)?)
+    Ok(postcard::to_allocvec(msg)?)
 }
 
 pub fn decode<T: for<'de> Deserialize<'de>>(buf: &[u8]) -> Result<T, FrameError> {
-    Ok(bincode::deserialize(buf)?)
+    Ok(postcard::from_bytes(buf)?)
 }
 
 pub fn write_frame<W: Write>(w: &mut W, payload: &[u8]) -> Result<(), FrameError> {

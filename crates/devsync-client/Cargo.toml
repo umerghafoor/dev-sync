@@ -4,6 +4,7 @@ description = "Client-side engine of devsync: config, push/pull-back sync, remot
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -21,7 +22,7 @@ toml.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 lz4_flex.workspace = true
-bincode.workspace = true
+postcard.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

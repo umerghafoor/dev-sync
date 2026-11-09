@@ -14,7 +14,7 @@ it connects.
 ## Quick install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh
 ```
 
 The installer:
@@ -31,7 +31,7 @@ Open a new terminal afterwards and check with `devsync --version`.
 Options go after `sh -s --`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh -s -- --version 0.1.0 --no-vscode
+curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh -s -- --version 0.1.0 --no-vscode
 ```
 
 | Option | Effect |
@@ -63,7 +63,7 @@ sh install.sh
 Requires [Rust](https://rustup.rs) 1.88 or newer.
 
 ```bash
-git clone https://github.com/OWNER/devsync.git
+git clone https://github.com/umerghafoor/dev-sync.git
 cd devsync
 sh install.sh
 ```
@@ -140,7 +140,7 @@ For zsh, make sure `~/.zfunc` is in `fpath` before `compinit`.
 ## Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/devsync/main/install.sh | sh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh -s -- --uninstall
 ```
 
 This removes the binary, the agents, the `PATH` line the installer added, and

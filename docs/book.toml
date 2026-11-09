@@ -6,9 +6,9 @@ language = "en"
 src = "src"
 
 [output.html]
-git-repository-url = "https://github.com/OWNER/devsync"
-edit-url-template = "https://github.com/OWNER/devsync/edit/main/docs/{path}"
-site-url = "/devsync/"
+git-repository-url = "https://github.com/umerghafoor/dev-sync"
+edit-url-template = "https://github.com/umerghafoor/dev-sync/edit/main/docs/{path}"
+site-url = "/dev-sync/"
 default-theme = "light"
 preferred-dark-theme = "navy"
 

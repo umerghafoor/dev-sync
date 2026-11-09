@@ -23,7 +23,7 @@ opening a public issue.
 ## Development setup
 
 ```bash
-git clone https://github.com/OWNER/devsync.git
+git clone https://github.com/umerghafoor/dev-sync.git
 cd devsync
 make check
 ```

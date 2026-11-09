@@ -283,7 +283,7 @@ pub fn list(state: &Path) -> Vec<JobInfo> {
 pub fn changes(root: &Path, state: &Path, id: &str, ignore: &IgnoreSpec) -> Result<Response, String> {
     let dir = job_dir(state, id)?;
     let meta = read_meta(&dir).ok_or("job metadata unreadable")?;
-    let mut cache = HashCache::load(state.join("hash-cache.bin"));
+    let mut cache = HashCache::load(state.join("hash-cache.v2.bin"));
     let all = devsync_fs::scan(root, ignore, &mut cache).map_err(|e| e.to_string())?;
     let since = meta.started_ns - 1_000_000_000;
     Ok(Response::Changes(all.into_iter().filter(|e| e.mtime_ns >= since).collect()))

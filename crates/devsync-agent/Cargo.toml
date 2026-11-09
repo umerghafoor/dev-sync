@@ -4,6 +4,7 @@ description = "Remote side of devsync: file transfer endpoint and detached job r
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true

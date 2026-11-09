@@ -4,6 +4,7 @@ description = "Wire protocol shared by the devsync client and remote agent"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -13,5 +14,5 @@ categories.workspace = true
 
 [dependencies]
 serde.workspace = true
-bincode.workspace = true
+postcard.workspace = true
 thiserror.workspace = true

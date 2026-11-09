@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - VS Code: the separate "Remote Jobs" sidebar is replaced by the Source
   Control panel.
+- Wire protocol and local caches now use `postcard` instead of the
+  unmaintained `bincode` (RUSTSEC-2025-0141). The protocol version is now 2;
+  the matching agent is uploaded automatically. After upgrading, the first
+  push re-hashes the project, and `devsync changes` lists every file until
+  that push.
 
 ### Fixed
 
@@ -67,5 +72,5 @@ First public release.
   remote shell profile, port forwarding, conflict diffs.
 - Documentation site (mdBook), CI, and release automation.
 
-[Unreleased]: https://github.com/OWNER/devsync/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/OWNER/devsync/releases/tag/v0.1.0
+[Unreleased]: https://github.com/umerghafoor/dev-sync/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/umerghafoor/dev-sync/releases/tag/v0.1.0

@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Documentation
-    url: https://OWNER.github.io/devsync/
+    url: https://umerghafoor.github.io/dev-sync/
     about: Installation, guides, configuration and troubleshooting.
   - name: Report a security vulnerability
-    url: https://github.com/OWNER/devsync/security/advisories/new
+    url: https://github.com/umerghafoor/dev-sync/security/advisories/new
     about: Please report security issues privately.

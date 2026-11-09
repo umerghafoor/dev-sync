@@ -4,6 +4,7 @@ description = "Short-lived agent sessions over ssh (or locally), agent deploymen
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true

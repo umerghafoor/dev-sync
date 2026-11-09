@@ -42,8 +42,8 @@ pub struct Snapshot {
 
 impl Snapshot {
     pub fn load(p: &Project) -> Self {
-        let path = p.state_dir().join("synced.bin");
-        let map = fs::read(&path).ok().and_then(|b| bincode::deserialize(&b).ok()).unwrap_or_default();
+        let path = p.state_dir().join("synced.v2.bin");
+        let map = fs::read(&path).ok().and_then(|b| postcard::from_bytes(&b).ok()).unwrap_or_default();
         Self { path, map }
     }
 
@@ -60,7 +60,7 @@ impl Snapshot {
     }
 
     pub fn save(&self) {
-        if let Ok(b) = bincode::serialize(&self.map) {
+        if let Ok(b) = postcard::to_allocvec(&self.map) {
             if let Some(d) = self.path.parent() {
                 let _ = fs::create_dir_all(d);
             }
@@ -73,7 +73,7 @@ impl Snapshot {
 }
 
 pub fn local_manifest(p: &Project) -> Result<Vec<Entry>> {
-    let mut cache = HashCache::load(p.state_dir().join("hash-cache.bin"));
+    let mut cache = HashCache::load(p.state_dir().join("hash-cache.v2.bin"));
     Ok(scan(&p.root, &p.ignore_spec(), &mut cache)?)
 }
 
@@ -347,7 +347,7 @@ fn pull_back_once(p: &Project, rep: &dyn Reporter, job_id: &str) -> Result<PullB
         other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
     };
     let mut snap = Snapshot::load(p);
-    let mut cache = HashCache::load(p.state_dir().join("hash-cache.bin"));
+    let mut cache = HashCache::load(p.state_dir().join("hash-cache.v2.bin"));
     let mut stats = PullBackStats::default();
     for e in changed {
         let local = scan_one(&p.root, &e.path, &mut cache)?;
