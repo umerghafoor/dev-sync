@@ -1,0 +1,244 @@
+{
+  "name": "devsync",
+  "displayName": "devsync \u2014 Edit Locally, Run Remotely",
+  "description": "Write code on this machine, run it on a remote one. Sync and remote execution that survive flaky connections.",
+  "version": "0.1.0",
+  "publisher": "devsync",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "remote",
+    "ssh",
+    "sync",
+    "rsync",
+    "offline"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/.devsync.toml",
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "devsync.menu",
+        "title": "Show Actions",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.init",
+        "title": "Initialize Project\u2026",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.push",
+        "title": "Push Now",
+        "category": "devsync",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "devsync.toggleWatch",
+        "title": "Start/Stop Auto Sync",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.run",
+        "title": "Run Command Remotely\u2026",
+        "category": "devsync",
+        "icon": "$(play)"
+      },
+      {
+        "command": "devsync.runBackground",
+        "title": "Run Command Remotely in Background\u2026",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.rerun",
+        "title": "Re-run Last Remote Command",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.shell",
+        "title": "Open Remote Shell",
+        "category": "devsync",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "devsync.forward",
+        "title": "Forward Ports",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.status",
+        "title": "Show Status",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.doctor",
+        "title": "Run Doctor",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.setupClaude",
+        "title": "Set Up Claude Code Integration",
+        "category": "devsync"
+      },
+      {
+        "command": "devsync.collect",
+        "title": "Collect Job Results",
+        "category": "devsync",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "devsync.refreshJobs",
+        "title": "Refresh Jobs",
+        "category": "devsync",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "devsync.openJob",
+        "title": "Open Output",
+        "category": "devsync",
+        "icon": "$(output)"
+      },
+      {
+        "command": "devsync.killJob",
+        "title": "Stop Job",
+        "category": "devsync",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "devsync.rerunJob",
+        "title": "Run Again",
+        "category": "devsync",
+        "icon": "$(debug-rerun)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devsync",
+          "title": "devsync",
+          "icon": "media/devsync.svg"
+        }
+      ]
+    },
+    "views": {
+      "devsync": [
+        {
+          "id": "devsync.jobs",
+          "name": "Remote Jobs",
+          "when": "devsync.active"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "devsync.jobs",
+        "contents": "No remote jobs yet.\n[Run Command Remotely](command:devsync.run)\n[Open Remote Shell](command:devsync.shell)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "devsync.run",
+          "when": "view == devsync.jobs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "devsync.push",
+          "when": "view == devsync.jobs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "devsync.collect",
+          "when": "view == devsync.jobs",
+          "group": "navigation@3"
+        },
+        {
+          "command": "devsync.refreshJobs",
+          "when": "view == devsync.jobs",
+          "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "devsync.openJob",
+          "when": "view == devsync.jobs && viewItem =~ /^job/",
+          "group": "inline@1"
+        },
+        {
+          "command": "devsync.killJob",
+          "when": "view == devsync.jobs && viewItem == job-running",
+          "group": "inline@2"
+        },
+        {
+          "command": "devsync.rerunJob",
+          "when": "view == devsync.jobs && viewItem =~ /^job/",
+          "group": "inline@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "devsync.openJob",
+          "when": "false"
+        },
+        {
+          "command": "devsync.killJob",
+          "when": "false"
+        },
+        {
+          "command": "devsync.rerunJob",
+          "when": "false"
+        }
+      ]
+    },
+    "terminal": {
+      "profiles": [
+        {
+          "id": "devsync.remoteShell",
+          "title": "devsync remote shell",
+          "icon": "remote"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "devsync",
+      "properties": {
+        "devsync.binaryPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the `devsync` binary. Empty: look it up on `PATH` (and `~/.cargo/bin`)."
+        },
+        "devsync.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start auto sync (devsync watch) when a devsync project is opened."
+        },
+        "devsync.openOutputOnBackgroundRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the job's output file after starting a background command."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "tsc -p ./ --noEmit",
+    "package": "vsce package --no-dependencies --allow-missing-repository",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.4.0"
+  }
+}
