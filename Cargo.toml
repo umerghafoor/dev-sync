@@ -33,7 +33,7 @@ lz4_flex = "0.11"
 ignore = "0.4"
 libc = "0.2"
 clap = { version = "4", features = ["derive", "env"] }
-notify-debouncer-mini = "0.4"
+notify-debouncer-mini = "0.7"
 ctrlc = { version = "3", features = ["termination"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
