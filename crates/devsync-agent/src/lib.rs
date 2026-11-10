@@ -5,6 +5,7 @@
 
 pub mod files;
 pub mod jobs;
+mod run;
 
 use devsync_proto::{self as proto, FrameError, Request, Response, PROTOCOL_VERSION};
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -38,6 +39,7 @@ impl Agent {
         std::fs::create_dir_all(&root)?;
         let root = root.canonicalize()?;
         let state = root.join(devsync_fs::AGENT_STATE_DIR);
+        devsync_fs::hide_from_git(&state)?;
         std::fs::create_dir_all(state.join("jobs"))?;
         std::fs::create_dir_all(state.join("partial"))?;
         Ok(Self { root, state })
@@ -96,6 +98,7 @@ impl Agent {
             Request::JobList => Ok(Response::Jobs(jobs::list(&self.state))),
             Request::JobChanges { id, ignore } => jobs::changes(&self.root, &self.state, &id, &ignore),
             Request::Tree { path, budget_ms } => files::tree(&self.root, &path, budget_ms),
+            Request::Run { cwd, argv, timeout_ms } => run::run(&self.root, &cwd, &argv, timeout_ms),
         }
     }
 }

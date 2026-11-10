@@ -18,7 +18,7 @@ CLIENT_BIN    := target/$(if $(CLIENT_TARGET),$(CLIENT_TARGET)/,)release/devsync
 DIST_NAME     := devsync-$(VERSION)-$(CLIENT_TRIPLE)
 
 .PHONY: all build client agents install uninstall dist checksums check test lint fmt \
-        cli-docs docs docs-serve vscode clean
+        cli-docs docs docs-serve site vscode clean
 
 all: build
 
@@ -87,6 +87,13 @@ cli-docs:
 docs:
 	mdbook build docs
 
+# The website as deployed: landing page + docs under /docs/ (in _site/).
+site:
+	rm -rf _site
+	mdbook build docs -d "$(CURDIR)/_site/docs"
+	cp -R site/. _site/
+	@echo "open _site/index.html (or: python3 -m http.server -d _site)"
+
 docs-serve:
 	mdbook serve docs --open
 
@@ -95,4 +102,4 @@ vscode:
 
 clean:
 	cargo clean
-	rm -rf dist docs/book extensions/vscode/out extensions/vscode/*.vsix
+	rm -rf dist docs/book _site extensions/vscode/out extensions/vscode/*.vsix

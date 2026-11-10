@@ -136,6 +136,30 @@ pub enum Cmd {
         #[arg(short, long)]
         all: bool,
     },
+    /// Print the remote version of a file (for diffs). Exits 1 if the remote
+    /// doesn't have it.
+    #[command(visible_alias = "show")]
+    Cat {
+        /// File path relative to the project.
+        path: String,
+    },
+    /// Run git in the remote project, as if you were there.
+    ///
+    /// Local changes are pushed first so git sees them (skip with
+    /// --no-push). Commands that change files (checkout, pull, reset,
+    /// stash, merge, …) bring the result back here; your unsent local edits
+    /// are never overwritten.
+    Git {
+        /// Don't push local changes first.
+        #[arg(long)]
+        no_push: bool,
+        /// Don't bring back files changed by the git command.
+        #[arg(long)]
+        no_pull: bool,
+        /// Arguments for git (use `--` before them if they have flags).
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Browse the remote project one folder at a time: sizes, file counts and
     /// what is synced. Nothing is hashed; huge folders show lower bounds.
     Tree {

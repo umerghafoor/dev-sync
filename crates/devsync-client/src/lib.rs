@@ -6,6 +6,7 @@ pub mod events;
 pub mod integrations;
 pub mod jobs;
 pub mod project;
+pub mod remote;
 pub mod route;
 pub mod selection;
 pub mod sync;

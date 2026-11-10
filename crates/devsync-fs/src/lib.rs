@@ -18,6 +18,17 @@ pub const CLIENT_STATE_DIR: &str = ".devsync";
 /// Directory (relative to the remote project root) holding agent state.
 pub const AGENT_STATE_DIR: &str = ".devsync-agent";
 
+/// Creates `dir` with a `.gitignore` of `*`, so git (and tools that honour
+/// .gitignore) never show devsync's own state as a change.
+pub fn hide_from_git(dir: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let gi = dir.join(".gitignore");
+    if !gi.exists() {
+        std::fs::write(gi, "# devsync state; never commit\n*\n")?;
+    }
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum FsError {
     #[error("{path}: {source}")]

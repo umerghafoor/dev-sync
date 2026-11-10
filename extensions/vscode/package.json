@@ -230,6 +230,113 @@
         "title": "Refresh Remote Files",
         "category": "devsync",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "devsync.openChange",
+        "title": "Open Changes",
+        "category": "devsync",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "devsync.git.refresh",
+        "title": "Refresh",
+        "category": "Git (remote)",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "devsync.git.commit",
+        "title": "Commit",
+        "category": "Git (remote)",
+        "icon": "$(check)"
+      },
+      {
+        "command": "devsync.git.commitAll",
+        "title": "Commit All",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stage",
+        "title": "Stage Changes",
+        "category": "Git (remote)",
+        "icon": "$(add)"
+      },
+      {
+        "command": "devsync.git.stageAll",
+        "title": "Stage All Changes",
+        "category": "Git (remote)",
+        "icon": "$(add)"
+      },
+      {
+        "command": "devsync.git.unstage",
+        "title": "Unstage Changes",
+        "category": "Git (remote)",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "devsync.git.unstageAll",
+        "title": "Unstage All Changes",
+        "category": "Git (remote)",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "devsync.git.discard",
+        "title": "Discard Changes",
+        "category": "Git (remote)",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "devsync.git.open",
+        "title": "Open Changes",
+        "category": "Git (remote)",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "devsync.git.openFile",
+        "title": "Open File",
+        "category": "Git (remote)",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "devsync.git.push",
+        "title": "Push",
+        "category": "Git (remote)",
+        "icon": "$(repo-push)"
+      },
+      {
+        "command": "devsync.git.pull",
+        "title": "Pull",
+        "category": "Git (remote)",
+        "icon": "$(repo-pull)"
+      },
+      {
+        "command": "devsync.git.fetch",
+        "title": "Fetch",
+        "category": "Git (remote)",
+        "icon": "$(repo-fetch)"
+      },
+      {
+        "command": "devsync.git.sync",
+        "title": "Sync (Pull, then Push)",
+        "category": "Git (remote)",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "devsync.git.publish",
+        "title": "Publish Branch",
+        "category": "Git (remote)",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "devsync.git.checkout",
+        "title": "Checkout to…",
+        "category": "Git (remote)",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "devsync.git.log",
+        "title": "Show History",
+        "category": "Git (remote)",
+        "icon": "$(history)"
       }
     ],
     "menus": {
@@ -318,6 +425,51 @@
           "command": "devsync.chooseFiles",
           "when": "scmProvider == devsync",
           "group": "2_sync@2"
+        },
+        {
+          "command": "devsync.git.commit",
+          "when": "scmProvider == devsync-git",
+          "group": "navigation@1"
+        },
+        {
+          "command": "devsync.git.refresh",
+          "when": "scmProvider == devsync-git",
+          "group": "navigation@2"
+        },
+        {
+          "command": "devsync.git.pull",
+          "when": "scmProvider == devsync-git",
+          "group": "1_sync@1"
+        },
+        {
+          "command": "devsync.git.push",
+          "when": "scmProvider == devsync-git",
+          "group": "1_sync@2"
+        },
+        {
+          "command": "devsync.git.fetch",
+          "when": "scmProvider == devsync-git",
+          "group": "1_sync@3"
+        },
+        {
+          "command": "devsync.git.sync",
+          "when": "scmProvider == devsync-git",
+          "group": "1_sync@4"
+        },
+        {
+          "command": "devsync.git.commitAll",
+          "when": "scmProvider == devsync-git",
+          "group": "2_commit@1"
+        },
+        {
+          "command": "devsync.git.checkout",
+          "when": "scmProvider == devsync-git",
+          "group": "3_branch@1"
+        },
+        {
+          "command": "devsync.git.log",
+          "when": "scmProvider == devsync-git",
+          "group": "3_branch@2"
         }
       ],
       "scm/resourceGroup/context": [
@@ -330,9 +482,29 @@
           "command": "devsync.collect",
           "when": "scmProvider == devsync && scmResourceGroup == jobs",
           "group": "inline"
+        },
+        {
+          "command": "devsync.git.stageAll",
+          "when": "scmProvider == devsync-git && scmResourceGroup == workingTree",
+          "group": "inline"
+        },
+        {
+          "command": "devsync.git.stageAll",
+          "when": "scmProvider == devsync-git && scmResourceGroup == merge",
+          "group": "inline"
+        },
+        {
+          "command": "devsync.git.unstageAll",
+          "when": "scmProvider == devsync-git && scmResourceGroup == index",
+          "group": "inline"
         }
       ],
       "scm/resourceState/context": [
+        {
+          "command": "devsync.openChange",
+          "when": "scmProvider == devsync && scmResourceState =~ /^change-/",
+          "group": "inline@0"
+        },
         {
           "command": "devsync.openFile",
           "when": "scmProvider == devsync && scmResourceState =~ /^change-(added|modified)$/",
@@ -392,6 +564,51 @@
           "command": "devsync.killJob",
           "when": "scmProvider == devsync && scmResourceState == job-running",
           "group": "1_job@3"
+        },
+        {
+          "command": "devsync.git.openFile",
+          "when": "scmProvider == devsync-git && scmResourceState != git-index",
+          "group": "inline@1"
+        },
+        {
+          "command": "devsync.git.discard",
+          "when": "scmProvider == devsync-git && scmResourceState =~ /^git-(workingTree|untracked)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "devsync.git.stage",
+          "when": "scmProvider == devsync-git && scmResourceState =~ /^git-(workingTree|untracked|merge)$/",
+          "group": "inline@3"
+        },
+        {
+          "command": "devsync.git.unstage",
+          "when": "scmProvider == devsync-git && scmResourceState == git-index",
+          "group": "inline@3"
+        },
+        {
+          "command": "devsync.git.open",
+          "when": "scmProvider == devsync-git",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "devsync.git.openFile",
+          "when": "scmProvider == devsync-git",
+          "group": "1_modification@2"
+        },
+        {
+          "command": "devsync.git.stage",
+          "when": "scmProvider == devsync-git && scmResourceState =~ /^git-(workingTree|untracked|merge)$/",
+          "group": "1_modification@3"
+        },
+        {
+          "command": "devsync.git.unstage",
+          "when": "scmProvider == devsync-git && scmResourceState == git-index",
+          "group": "1_modification@3"
+        },
+        {
+          "command": "devsync.git.discard",
+          "when": "scmProvider == devsync-git && scmResourceState =~ /^git-(workingTree|untracked)$/",
+          "group": "1_modification@4"
         }
       ],
       "editor/title/run": [
@@ -457,6 +674,78 @@
         },
         {
           "command": "devsync.pullPaths",
+          "when": "false"
+        },
+        {
+          "command": "devsync.git.refresh",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.commit",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.commitAll",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stage",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stageAll",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.unstage",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.unstageAll",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.discard",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.open",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.openFile",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.push",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.pull",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.fetch",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.sync",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.publish",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.checkout",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.log",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.openChange",
           "when": "false"
         }
       ],
@@ -769,6 +1058,16 @@
           "type": "boolean",
           "default": true,
           "description": "Also show devsync in the Source Control view (next to Git). The devsync sidebar in the Activity Bar is always available. Takes effect after reloading the window."
+        },
+        "devsync.git.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the remote project's git repository in Source Control as \"Git (remote)\": stage, commit, push, pull and branch on the remote, with diffs."
+        },
+        "devsync.git.smartCommit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Commit all changes on the remote when nothing is staged, without asking."
         }
       }
     },

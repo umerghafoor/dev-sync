@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Remote git: `devsync git <args…>` runs git in the remote project (local
+  edits are pushed first; checkout/pull/reset/stash/… bring their changes
+  back, including deletions) and `devsync cat <file>` prints a remote file.
+  Agent protocol 5 adds a synchronous `Run` request for short commands.
+- VS Code: **Git (remote)** in Source Control — staged/changes groups with
+  M/A/D/R/U badges, diffs, stage/unstage/discard, ⌘Enter commit (with smart
+  commit), branch switcher, pull/push/fetch/sync with ahead/behind counts.
+- VS Code: clicking a file under "Not on remote yet" opens a diff against
+  the remote's copy.
+- New website: a landing page at the site root; the docs moved to `/docs/`
+  with a devsync theme. `make site` builds both.
 - Progress for pushes and pulls: a live progress bar in the terminal (files,
   bytes, speed, time left, current file) and `stage`, `pull_planned` and
   `progress` events in `--json` output.
@@ -72,6 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- devsync's own state folders (`.devsync/`, `.devsync-agent/`) now contain a
+  `.gitignore` of `*`, so they never show up in git status on either side.
 - Pulls appeared to start over every time on a flaky link. Now only one
   devsync process syncs a project at a time (auto sync and a manual pull no
   longer download the same files into the same temp file and break each

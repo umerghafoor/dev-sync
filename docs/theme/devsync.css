@@ -1,0 +1,118 @@
+/* devsync brand on top of mdBook's themes (matches the landing page). */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  --ds-brand: #4f46e5;
+  --ds-brand-2: #2563eb;
+  --ds-brand-3: #06b6d4;
+  --ds-grad: linear-gradient(135deg, #4f46e5 0%, #2563eb 55%, #06b6d4 100%);
+  --content-max-width: 820px;
+  --mono-font: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html { font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+body { -webkit-font-smoothing: antialiased; }
+code, pre { font-family: var(--mono-font) !important; }
+
+/* Light theme */
+.light, .rust {
+  --bg: #ffffff;
+  --fg: #1f2937;
+  --sidebar-bg: #f6f7fb;
+  --sidebar-fg: #3b4252;
+  --sidebar-active: #4f46e5;
+  --sidebar-spacer: #e4e7f0;
+  --links: #2563eb;
+  --inline-code-color: #4338ca;
+  --quote-bg: #f1f3fb;
+  --quote-border: #c7cdf5;
+  --table-header-bg: #f1f3fb;
+  --table-alternate-bg: #fafbfe;
+  --table-border-color: #e4e7f0;
+  --searchbar-bg: #ffffff;
+  --theme-popup-bg: #ffffff;
+}
+
+/* Dark themes */
+.navy, .coal, .ayu {
+  --bg: #0b1020;
+  --fg: #d7deef;
+  --sidebar-bg: #0e1528;
+  --sidebar-fg: #a9b4cf;
+  --sidebar-active: #a5b4fc;
+  --sidebar-spacer: #1e293b;
+  --links: #7dd3fc;
+  --inline-code-color: #c7d2fe;
+  --quote-bg: #121a31;
+  --quote-border: #2b3a66;
+  --table-header-bg: #121a31;
+  --table-alternate-bg: #0e1528;
+  --table-border-color: #1e293b;
+  --searchbar-bg: #121a31;
+  --theme-popup-bg: #121a31;
+  --icons: #8b97b5;
+  --icons-hover: #e6eaf5;
+}
+
+/* Top bar: logo + gradient wordmark, link back to the homepage */
+#menu-bar { border-bottom: 1px solid var(--sidebar-spacer); }
+.menu-title {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.menu-title::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  background: url("../assets/logo.svg") center / contain no-repeat;
+  flex: none;
+}
+
+/* Sidebar */
+.sidebar { font-size: 0.93em; border-right: 1px solid var(--sidebar-spacer); }
+.chapter li.part-title {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-top: 1.4em;
+}
+.chapter li a { border-radius: 6px; padding: 3px 8px; }
+.chapter li a.active { font-weight: 600; background: color-mix(in srgb, var(--sidebar-active) 12%, transparent); }
+.chapter li a:hover { background: color-mix(in srgb, var(--sidebar-active) 7%, transparent); text-decoration: none; }
+
+/* Content */
+.content main { line-height: 1.7; }
+.content h1, .content h2, .content h3 { letter-spacing: -0.02em; }
+.content h1 { font-size: 2.3em; font-weight: 800; margin-top: 0.6em; }
+.content h2 { font-weight: 700; padding-bottom: 0.25em; border-bottom: 1px solid var(--table-border-color); margin-top: 2em; }
+.content h3 { font-weight: 650; }
+.content a { text-decoration: none; }
+.content a:hover { text-decoration: underline; }
+.content img { border-radius: 10px; }
+.content :not(pre) > code {
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--inline-code-color) 9%, transparent);
+  font-size: 0.86em;
+}
+pre {
+  border-radius: 10px !important;
+  border: 1px solid var(--table-border-color);
+}
+pre > code { padding: 1em 1.1em !important; font-size: 0.86em; }
+
+blockquote { border-radius: 8px; border-left-width: 4px; }
+
+table { border-radius: 10px; overflow: hidden; border-collapse: separate; border-spacing: 0; border: 1px solid var(--table-border-color); }
+table td, table th { border: 0 !important; border-bottom: 1px solid var(--table-border-color) !important; padding: 0.55em 0.85em; }
+table tr:last-child td { border-bottom: 0 !important; }
+table thead th { font-weight: 600; }
+
+/* Prev / next buttons */
+.nav-chapters { border-radius: 10px; }
+.nav-chapters:hover { color: var(--ds-brand); }

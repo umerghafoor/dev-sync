@@ -376,6 +376,46 @@ fn pulls_resume_skip_what_is_here_and_never_run_twice_at_once() {
 }
 
 #[test]
+fn remote_git_and_cat_work_like_local_git() {
+    let env = setup();
+    write(&env.local.join("a.txt"), "one\n");
+    write(&env.local.join("b.txt"), "bee\n");
+    ok(&devsync(&env.local, &["push"]));
+    let git = |args: &[&str]| {
+        let mut all = vec!["git", "--"];
+        all.extend_from_slice(args);
+        devsync(&env.local, &all)
+    };
+    ok(&git(&["init", "-q"]));
+    ok(&git(&["add", "-A"]));
+    ok(&git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "first"]));
+    assert!(env.remote.join(".git").is_dir());
+    assert!(!env.local.join(".git").exists(), "the remote's .git stays there");
+
+    // A local edit is pushed first, so remote git sees it.
+    write(&env.local.join("a.txt"), "two\n");
+    assert_eq!(ok(&git(&["status", "--porcelain"])), " M a.txt\n");
+    // `cat` shows the remote copy (for diffs); missing files exit 1.
+    assert_eq!(ok(&devsync(&env.local, &["cat", "a.txt"])), "two\n");
+    assert_eq!(devsync(&env.local, &["cat", "nope.txt"]).status.code(), Some(1));
+    // `show` of HEAD gives the committed version, like local git.
+    assert_eq!(ok(&git(&["show", "HEAD:a.txt"])), "one\n");
+
+    // Commands that change files bring the result back here.
+    ok(&git(&["checkout", "--", "a.txt"]));
+    assert_eq!(fs::read_to_string(env.local.join("a.txt")).unwrap(), "one\n");
+    ok(&git(&["rm", "-q", "b.txt"]));
+    assert!(!env.local.join("b.txt").exists(), "deleted on the remote, so removed here");
+
+    // JSON output for the VS Code extension.
+    let v: serde_json::Value =
+        serde_json::from_str(ok(&devsync(&env.local, &["--json", "git", "--no-push", "status", "--porcelain"])).trim())
+            .unwrap();
+    assert_eq!(v["code"], 0);
+    assert_eq!(v["stdout"], "D  b.txt\n");
+}
+
+#[test]
 fn first_sync_pulls_existing_remote_code_into_new_folder() {
     let env = setup();
     // The remote already holds the project.

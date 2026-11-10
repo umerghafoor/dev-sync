@@ -11,6 +11,8 @@ import { DevsyncScm } from "./scm";
 import { Sidebar } from "./views";
 import { RemoteFiles } from "./remoteFiles";
 import { Activity, formatBytes } from "./activity";
+import { emptyUri, RemoteDocs, remoteUri } from "./remoteDocs";
+import { RemoteGit } from "./remoteGit";
 
 const CONFIG_FILE = ".devsync.toml";
 
@@ -22,6 +24,8 @@ class Controller implements vscode.Disposable {
   private scm?: DevsyncScm;
   private sidebar?: Sidebar;
   private remoteFiles?: RemoteFiles;
+  private remoteDocs?: RemoteDocs;
+  private remoteGit?: RemoteGit;
   private binaryStamp = "";
   private updateTimer?: NodeJS.Timeout;
   private askedToChoose = false;
@@ -60,7 +64,9 @@ class Controller implements vscode.Disposable {
       () => this.model?.scheduleRefresh(0),
       (title, op) => this.withTransfer(title, op),
     );
+    this.remoteDocs = new RemoteDocs(this.log);
     this.disposables.push(
+      this.remoteDocs,
       this.sidebar,
       this.remoteFiles,
       this.activity,
@@ -94,6 +100,16 @@ class Controller implements vscode.Disposable {
     }
     this.sidebar?.setModel(this.model);
     this.remoteFiles?.setRoot(root);
+    if (vscode.workspace.getConfiguration("devsync").get<boolean>("git.enabled", true)) {
+      this.remoteGit = new RemoteGit(root, this.log, () => {
+        this.model?.scheduleRefresh(0);
+        this.remoteDocs?.refreshAll();
+      });
+      this.disposables.push(
+        this.remoteGit,
+        vscode.window.onDidChangeWindowState((w) => w.focused && this.remoteGit?.scheduleRefresh(300)),
+      );
+    }
     // When the devsync program is updated, restart auto sync so no old
     // version keeps running in the background.
     this.updateTimer = setInterval(() => {
@@ -251,6 +267,8 @@ class Controller implements vscode.Disposable {
         if (e.upload > 0 || e.delete > 0) this.setState("syncing", `${e.upload} to upload, ${e.delete} to delete`);
         break;
       case "synced":
+        this.remoteGit?.scheduleRefresh();
+        this.remoteDocs?.refreshAll();
         this.lastSync = new Date();
         this.restartDelay = 2000;
         this.setState("synced", `sent ${e.files} file(s)`);
@@ -258,6 +276,7 @@ class Controller implements vscode.Disposable {
         this.model?.scheduleRefresh(0);
         break;
       case "up_to_date":
+        this.remoteGit?.scheduleRefresh();
         this.lastSync = new Date();
         this.setState("synced", "remote is up to date");
         this.model?.scheduleRefresh(0);
@@ -286,6 +305,7 @@ class Controller implements vscode.Disposable {
         break;
       case "pulled":
         this.log.appendLine(`pulled ${e.path}`);
+        this.remoteGit?.scheduleRefresh();
         this.model?.scheduleRefresh();
         break;
       case "conflict":
@@ -634,6 +654,20 @@ class Controller implements vscode.Disposable {
     });
 
     reg("devsync.pull", () => this.pullPaths([]));
+
+    // Click on a change: diff against the remote's copy, like Git's view.
+    reg("devsync.openChange", async (rel?: string, status?: string) => {
+      const root = this.requireRoot();
+      if (!rel) return;
+      const name = path.basename(rel);
+      const local = vscode.Uri.file(path.join(root, rel));
+      if (status === "deleted") {
+        await vscode.commands.executeCommand("vscode.diff", remoteUri(root, rel), emptyUri(rel), `${name} (Remote ↔ deleted here)`);
+        return;
+      }
+      const left = status === "added" ? emptyUri(rel) : remoteUri(root, rel);
+      await vscode.commands.executeCommand("vscode.diff", left, local, `${name} (Remote ↔ Local)`, { preview: true });
+    });
 
     // Explorer / editor-tab context menu: one item or a multi-selection.
     reg("devsync.pullPaths", async (uri?: vscode.Uri | { node?: { path: string } }, uris?: vscode.Uri[]) => {

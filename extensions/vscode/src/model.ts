@@ -55,6 +55,19 @@ export class Decorations implements vscode.FileDecorationProvider {
         return d("D", "gitDecoration.deletedResourceForeground", "Deleted — will be removed on the remote");
       case "conflict":
         return d("!", "gitDecoration.conflictingResourceForeground", "Changed both here and on the remote");
+      // Remote git (Source Control → Git (remote)), same letters as VS Code's Git.
+      case "git-modified":
+        return d("M", "gitDecoration.modifiedResourceForeground", "Modified (remote git)");
+      case "git-added":
+        return d("A", "gitDecoration.addedResourceForeground", "Added (remote git)");
+      case "git-deleted":
+        return d("D", "gitDecoration.deletedResourceForeground", "Deleted (remote git)");
+      case "git-renamed":
+        return d("R", "gitDecoration.renamedResourceForeground", "Renamed (remote git)");
+      case "git-untracked":
+        return d("U", "gitDecoration.untrackedResourceForeground", "Untracked (remote git)");
+      case "git-conflict":
+        return d("!", "gitDecoration.conflictingResourceForeground", "Conflict (remote git)");
       case "job-ok":
         return d("✓", "testing.iconPassed", "Finished successfully");
       case "job-failed":
@@ -161,10 +174,8 @@ export class Model implements vscode.Disposable {
           tooltip: `${c.path} — ${c.status}, not yet on the remote`,
           contextValue: `change-${c.status}`,
           deleted: c.status === "deleted",
-          command:
-            c.status === "deleted"
-              ? undefined
-              : { command: "vscode.open", title: "Open", arguments: [vscode.Uri.file(file)] },
+          // Like Git: click shows what changed compared with the remote.
+          command: { command: "devsync.openChange", title: "Open Changes", arguments: [c.path, c.status] },
         };
       });
     } catch (e) {

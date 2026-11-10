@@ -71,6 +71,8 @@ pub fn run(cli: Cli) -> i32 {
         Cmd::Ls { paths, changed, all } => ls(&g, &paths, changed, all),
         Cmd::Status => status(&g),
         Cmd::Changes => changes(&g),
+        Cmd::Cat { path } => cat(&g, &path),
+        Cmd::Git { no_push, no_pull, args } => git(&g, &args, no_push, no_pull),
         Cmd::Tree { path } => tree(&g, path.as_deref().unwrap_or("")),
         Cmd::Select { paths, pull, all } => select(&g, &paths, pull, all),
         Cmd::Unselect { paths } => unselect(&g, &paths),
@@ -211,6 +213,88 @@ fn push(g: &Global, dry_run: bool, force: bool) -> Result<i32> {
         }
     }
     Ok(0)
+}
+
+fn cat(g: &Global, path: &str) -> Result<i32> {
+    let p = project()?;
+    let rep = reporter(g, true, true);
+    // Paths are project-relative, wherever devsync was started.
+    let p = Project { rel_cwd: String::new(), ..p };
+    match devsync_client::remote::cat(&p, rep.as_ref(), path)? {
+        Some(bytes) => {
+            use std::io::Write;
+            let mut out = std::io::stdout().lock();
+            out.write_all(&bytes)?;
+            out.flush()?;
+            Ok(0)
+        }
+        None => {
+            if !g.quiet {
+                human(g).warn(&format!("{path} is not on the remote"));
+            }
+            Ok(1)
+        }
+    }
+}
+
+/// git subcommands that can change files in the working tree.
+fn git_changes_files(args: &[String]) -> bool {
+    const WRITES: &[&str] = &[
+        "checkout",
+        "switch",
+        "restore",
+        "reset",
+        "pull",
+        "merge",
+        "rebase",
+        "stash",
+        "cherry-pick",
+        "revert",
+        "am",
+        "apply",
+        "clean",
+        "mv",
+        "rm",
+        "submodule",
+        "worktree",
+    ];
+    // First non-option word is the subcommand (skips e.g. `-c k=v`, `-C dir`).
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if a == "-c" || a == "-C" {
+            it.next();
+            continue;
+        }
+        if a.starts_with('-') {
+            continue;
+        }
+        return WRITES.contains(&a.as_str());
+    }
+    false
+}
+
+fn git(g: &Global, args: &[String], no_push: bool, no_pull: bool) -> Result<i32> {
+    let p = project()?;
+    let rep = reporter(g, true, true);
+    if !no_push {
+        sync::push(&p, rep.as_ref(), sync::PushOptions::default())?;
+    }
+    let mut argv = vec!["git".to_string()];
+    argv.extend(args.iter().cloned());
+    let out = devsync_client::remote::run(&p, &argv, std::time::Duration::from_secs(600))?;
+    let code = out.code.unwrap_or(1);
+    if g.json {
+        print_json(json!({"event": "git", "code": out.code, "stdout": String::from_utf8_lossy(&out.stdout),
+            "stderr": String::from_utf8_lossy(&out.stderr)}));
+    } else {
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(&out.stdout);
+        let _ = std::io::stderr().write_all(&out.stderr);
+    }
+    if !no_pull && git_changes_files(args) {
+        sync::pull_remote_changes(&p, rep.as_ref())?;
+    }
+    Ok(code)
 }
 
 fn pull(g: &Global, paths: &[String], force: bool, to: Option<&Path>, dry_run: bool) -> Result<i32> {

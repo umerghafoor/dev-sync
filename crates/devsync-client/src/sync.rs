@@ -113,6 +113,13 @@ impl Snapshot {
         }
     }
 
+    pub fn forget(&mut self, rel: &str) {
+        self.map.remove(rel);
+        if let Some(seen) = &mut self.seen {
+            seen.remove(rel);
+        }
+    }
+
     pub fn save(&self) {
         save_map(&self.path, &self.map);
         self.save_seen();
@@ -436,6 +443,17 @@ fn under(path: &str, prefixes: &[String]) -> bool {
 /// `devsync pull` without a path: bring the whole project's remote changes
 /// down safely (sync excludes apply; local edits are never overwritten).
 pub fn pull_project(p: &Project, rep: &dyn Reporter, dry_run: bool) -> Result<PullStats> {
+    pull_project_with(p, rep, dry_run, false)
+}
+
+/// After a remote command changed the tree (e.g. `git checkout`): bring the
+/// changes here, and also remove local files the remote no longer has, if
+/// they are unchanged since the last sync (local edits are never lost).
+pub fn pull_remote_changes(p: &Project, rep: &dyn Reporter) -> Result<PullStats> {
+    pull_project_with(p, rep, false, true)
+}
+
+fn pull_project_with(p: &Project, rep: &dyn Reporter, dry_run: bool, mirror_deletes: bool) -> Result<PullStats> {
     let _lock = p.sync_lock(rep)?;
     p.with_retry(rep, || {
         stage(rep, Stage::ScanLocal, "checking local files");
@@ -450,6 +468,18 @@ pub fn pull_project(p: &Project, rep: &dyn Reporter, dry_run: bool) -> Result<Pu
         let opts = PullOpts { dry_run, force: false, what: "pulling from remote" };
         let stats = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, &opts)?;
         s.close();
+        if mirror_deletes && snap.existed() {
+            let on_remote: std::collections::HashSet<&str> = remote.iter().map(|e| e.path.as_str()).collect();
+            for l in &local {
+                let untouched = snap.get(&l.path) == Some(&l.hash);
+                if untouched && !on_remote.contains(l.path.as_str()) {
+                    if fs::remove_file(p.root.join(&l.path)).is_ok() {
+                        rep.event(Event::Info { message: format!("removed {} (deleted on the remote)", l.path) });
+                    }
+                    snap.forget(&l.path);
+                }
+            }
+        }
         if !dry_run {
             snap.save();
         }

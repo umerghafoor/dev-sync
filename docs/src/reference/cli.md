@@ -20,6 +20,8 @@ current directory and its parents.
 | [`collect`](#devsync-collect) | Fetch output of running jobs into .devsync/jobs/ once, then exit |
 | [`pull`](#devsync-pull) | Get code from the remote: the whole project, or specific files/folders |
 | [`ls`](#devsync-ls) | List files on the remote and how they compare with yours |
+| [`cat`](#devsync-cat) | Print the remote version of a file (for diffs). Exits 1 if the remote doesn't have it [alias: show] |
+| [`git`](#devsync-git) | Run git in the remote project, as if you were there |
 | [`tree`](#devsync-tree) | Browse the remote project one folder at a time: sizes, file counts and what is synced. Nothing is hashed; huge folders show lower bounds |
 | [`select`](#devsync-select) | Choose what to sync: add files or folders to the selection |
 | [`unselect`](#devsync-unselect) | Stop syncing files or folders (they stay untouched on the remote) |
@@ -50,6 +52,8 @@ Commands:
   collect      Fetch output of running jobs into .devsync/jobs/ once, then exit
   pull         Get code from the remote: the whole project, or specific files/folders
   ls           List files on the remote and how they compare with yours
+  cat          Print the remote version of a file (for diffs). Exits 1 if the remote doesn't have it [alias: show]
+  git          Run git in the remote project, as if you were there
   tree         Browse the remote project one folder at a time: sizes, file counts and what is synced. Nothing is hashed; huge folders show lower bounds
   select       Choose what to sync: add files or folders to the selection
   unselect     Stop syncing files or folders (they stay untouched on the remote)

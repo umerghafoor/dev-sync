@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
 /// Bumped on any incompatible change to the messages below.
-pub const PROTOCOL_VERSION: u32 = 4;
+pub const PROTOCOL_VERSION: u32 = 5;
 
 /// Sent by the agent before anything else. The client discards whatever
 /// precedes it (output from the remote user's shell startup files) and sends
@@ -181,21 +181,53 @@ pub enum Request {
         path: String,
         budget_ms: u32,
     },
+    /// Run a short command (e.g. `git status`) synchronously in `cwd`
+    /// (relative to the root) and return its output. No shell is involved.
+    /// Long-running work belongs in jobs, which survive disconnects.
+    Run {
+        cwd: String,
+        argv: Vec<String>,
+        timeout_ms: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Response {
-    Hello { version: u32, agent_version: String, os: String, arch: String, root: String },
+    Hello {
+        version: u32,
+        agent_version: String,
+        os: String,
+        arch: String,
+        root: String,
+    },
     Manifest(Vec<Entry>),
     Offsets(Vec<u64>),
     Ok,
-    Chunk { data: Vec<u8>, eof: bool, size: u64 },
-    JobStarted { id: String },
-    JobOutput { state: JobState, data: Vec<u8>, next_offset: u64 },
+    Chunk {
+        data: Vec<u8>,
+        eof: bool,
+        size: u64,
+    },
+    JobStarted {
+        id: String,
+    },
+    JobOutput {
+        state: JobState,
+        data: Vec<u8>,
+        next_offset: u64,
+    },
     Jobs(Vec<JobInfo>),
     Changes(Vec<Entry>),
-    Error { message: String },
+    Error {
+        message: String,
+    },
     Tree(Vec<TreeNode>),
+    /// Result of [`Request::Run`]; `code` is `None` if killed (timeout/signal).
+    RunOutput {
+        code: Option<i32>,
+        stdout: Vec<u8>,
+        stderr: Vec<u8>,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]

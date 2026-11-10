@@ -31,6 +31,7 @@ impl Project {
         })?;
         let config = Config::load(&root.join(CONFIG_FILE)).map_err(ClientError::Config)?;
         let rel_cwd = devsync_fs::paths::to_rel(&root, &start).unwrap_or_default();
+        let _ = devsync_fs::hide_from_git(&root.join(devsync_fs::CLIENT_STATE_DIR));
         Ok(Self { root, config, rel_cwd })
     }
 

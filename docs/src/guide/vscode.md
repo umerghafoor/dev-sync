@@ -61,6 +61,38 @@ You can drag the icon to reorder it, or drag the devsync sections into the
 Secondary Side Bar. If you only want the sidebar, set
 `devsync.sourceControl` to `false` to hide devsync from the Source Control view.
 
+### Seeing what changed (diffs)
+
+Click a file under **Not on Remote Yet** to see a diff like Git's: the
+remote's copy on the left, yours on the right. New files diff against an
+empty file. The ⇄ button on each row does the same.
+
+### The remote's git repository: Git (remote)
+
+If the remote project is a git repository, Source Control also shows
+**Git (remote)**, which works like VS Code's own Git, but on the remote's
+repository:
+
+- **Changes** and **Staged Changes** with the usual M / A / D / R / U
+  letters. Click a file for a diff (last committed or staged version ↔ yours).
+- **+** stages, **−** unstages, **↶** discards (with confirmation). Group
+  headers stage or unstage everything.
+- Type a message and press **⌘Enter / Ctrl+Enter** to commit. If nothing is
+  staged, it offers to stage everything first (`devsync.git.smartCommit`
+  skips the question).
+- Status bar: the remote branch (click to switch or create a branch) and a
+  sync button with ahead/behind counts (pull, then push).
+- **⋯** menu: Pull, Push, Fetch, Sync, Commit All, Checkout to…, Show History.
+
+Your local edits are pushed before every git command, so git always sees
+them. Commands that change files on the remote (checkout, pull, discard, …)
+bring the result back here; files you edited and haven't sent are never
+overwritten. Turn the section off with `devsync.git.enabled`.
+
+The same works from a terminal: `devsync git status`, `devsync git commit -am
+"fix"`, `devsync git checkout -b feature`. `devsync cat <file>` prints the
+remote's copy of a file.
+
 ### Seeing what is pushed or pulled
 
 While files move, the status bar shows the direction and percentage

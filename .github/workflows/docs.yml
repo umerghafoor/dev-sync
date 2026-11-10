@@ -3,7 +3,7 @@ name: Docs
 on:
   push:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/docs.yml"]
+    paths: ["docs/**", "site/**", ".github/workflows/docs.yml"]
   workflow_dispatch:
 
 permissions:
@@ -23,11 +23,14 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: mdbook
-      - run: mdbook build docs
+      # Landing page at the root, the book under /docs/.
+      - run: |
+          mdbook build docs -d "$PWD/_site/docs"
+          cp -R site/. _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/book
+          path: _site
 
   deploy:
     needs: build
