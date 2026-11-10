@@ -60,6 +60,9 @@ export class RemoteDocs implements vscode.TextDocumentContentProvider, vscode.Di
       const file = objectPath(root, id);
       if (!fs.existsSync(file)) await run(root, ["git-objects", "--", id], 120_000);
       if (fs.existsSync(file)) return fs.promises.readFile(file, "utf8");
+      // Too large for the cache: read that exact version directly.
+      const r = await run(root, ["git", "--no-push", "--no-pull", "--", "cat-file", "blob", id], 300_000);
+      if (r.code === 0) return r.stdout;
     }
     const args =
       uri.scheme === GIT_SCHEME

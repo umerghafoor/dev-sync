@@ -337,6 +337,12 @@
         "title": "Show History",
         "category": "Git (remote)",
         "icon": "$(history)"
+      },
+      {
+        "command": "devsync.git.graphRefresh",
+        "title": "Refresh Graph",
+        "category": "Git (remote)",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -747,6 +753,10 @@
         {
           "command": "devsync.openChange",
           "when": "false"
+        },
+        {
+          "command": "devsync.git.graphRefresh",
+          "when": "devsync.remoteGit"
         }
       ],
       "view/title": [
@@ -834,6 +844,31 @@
           "command": "devsync.refreshRemoteFiles",
           "when": "view == devsync.remoteFiles",
           "group": "navigation@1"
+        },
+        {
+          "command": "devsync.git.fetch",
+          "when": "view == devsync.gitGraph",
+          "group": "navigation@1"
+        },
+        {
+          "command": "devsync.git.pull",
+          "when": "view == devsync.gitGraph",
+          "group": "navigation@2"
+        },
+        {
+          "command": "devsync.git.push",
+          "when": "view == devsync.gitGraph",
+          "group": "navigation@3"
+        },
+        {
+          "command": "devsync.git.graphRefresh",
+          "when": "view == devsync.gitGraph",
+          "group": "navigation@4"
+        },
+        {
+          "command": "devsync.git.checkout",
+          "when": "view == devsync.gitGraph",
+          "group": "1_branch@1"
         }
       ],
       "view/item/context": [
@@ -1107,6 +1142,15 @@
           "id": "devsync.jobs",
           "name": "Remote Jobs",
           "icon": "media/activity.svg"
+        }
+      ],
+      "scm": [
+        {
+          "type": "webview",
+          "id": "devsync.gitGraph",
+          "name": "Graph (remote)",
+          "when": "devsync.remoteGit",
+          "icon": "$(git-commit)"
         }
       ]
     }

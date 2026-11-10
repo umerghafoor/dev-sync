@@ -57,9 +57,17 @@ const LETTER_WORD: Record<string, string> = {
 const ZERO = /^0+$/;
 
 /** Parses `git status --porcelain=v2 -b -z`. Paths are repo-relative. */
-export function parseStatus(out: string): { branch: string; upstream: string; ahead: number; behind: number; entries: Entry[] } {
+export function parseStatus(out: string): {
+  branch: string;
+  oid: string;
+  upstream: string;
+  ahead: number;
+  behind: number;
+  entries: Entry[];
+} {
   const parts = out.split("\0");
   let branch = "";
+  let oid = "";
   let upstream = "";
   let ahead = 0;
   let behind = 0;
@@ -73,6 +81,7 @@ export function parseStatus(out: string): { branch: string; upstream: string; ah
       const [, key, ...rest] = p.split(" ");
       const val = rest.join(" ");
       if (key === "branch.head") branch = val === "(detached)" ? "detached" : val;
+      if (key === "branch.oid") oid = val;
       if (key === "branch.upstream") upstream = val;
       if (key === "branch.ab") {
         ahead = Number(/\+(\d+)/.exec(val)?.[1] ?? 0);
@@ -102,7 +111,7 @@ export function parseStatus(out: string): { branch: string; upstream: string; ah
     if (x !== " ") entries.push({ rel, from, group: "index", letter: x, head, index });
     if (y !== " ") entries.push({ rel, group: "workingTree", letter: y, head, index });
   }
-  return { branch, upstream, ahead, behind, entries };
+  return { branch, oid, upstream, ahead, behind, entries };
 }
 
 type State = vscode.SourceControlResourceState & { entry: Entry };
@@ -117,6 +126,10 @@ export class RemoteGit implements vscode.Disposable {
   private behind = 0;
   private upstream = "";
   private entries: Entry[] = [];
+  /** Commit HEAD points at; the graph reloads when this (or the upstream position) changes. */
+  head = "";
+  private readonly headEmitter = new vscode.EventEmitter<void>();
+  readonly onDidChangeHead = this.headEmitter.event;
   private timer?: NodeJS.Timeout;
   private refreshing = false;
   private again = false;
@@ -192,6 +205,8 @@ export class RemoteGit implements vscode.Disposable {
         return;
       }
       const s = parseStatus(r.stdout);
+      const moved = s.oid !== this.head || s.ahead !== this.ahead || s.behind !== this.behind || s.upstream !== this.upstream;
+      this.head = s.oid;
       this.branch = s.branch;
       this.upstream = s.upstream;
       this.ahead = s.ahead;
@@ -201,6 +216,7 @@ export class RemoteGit implements vscode.Disposable {
         .filter((e) => e.rel.startsWith(prefix))
         .map((e) => ({ ...e, rel: e.rel.slice(prefix.length), from: e.from?.slice(prefix.length) }));
       this.render();
+      if (moved) this.headEmitter.fire();
       void this.prefetch();
     } catch (e) {
       this.log.appendLine(`git (remote): ${e instanceof Error ? e.message : String(e)}`);
@@ -497,8 +513,13 @@ export class RemoteGit implements vscode.Disposable {
     if (pick.args) await this.gitOk(`Checking out`, pick.args);
   }
 
+  get upstreamName(): string {
+    return this.upstream;
+  }
+
   dispose(): void {
     if (this.timer) clearTimeout(this.timer);
+    this.headEmitter.dispose();
     this.sc?.dispose();
     for (const d of this.disposables) d.dispose();
   }

@@ -83,6 +83,11 @@ repository:
 - Status bar: the remote branch (click to switch or create a branch) and a
   sync button with ahead/behind counts (pull, then push).
 - **⋯** menu: Pull, Push, Fetch, Sync, Commit All, Checkout to…, Show History.
+- **Graph (remote)**, below it in Source Control: the remote branch's history
+  with lanes and merges, the current commit and the upstream (☁) marked.
+  Click a commit to open all of its changes side by side; right-click copies
+  its id. Buttons: Fetch, Pull, Push, Refresh. (VS Code's own Graph only
+  shows local repositories.)
 
 Your local edits are pushed before every git command, so git always sees
 them. Commands that change files on the remote (checkout, pull, discard, …)

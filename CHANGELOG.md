@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- VS Code: **Graph (remote)** in Source Control — the remote repository's
+  commit graph (lanes, merges, branch/upstream badges); clicking a commit
+  opens all its changes in a multi-file diff, served from the object cache.
 - Remote git: `devsync git <args…>` runs git in the remote project (local
   edits are pushed first; checkout/pull/reset/stash/… bring their changes
   back, including deletions) and `devsync cat <file>` prints a remote file.
