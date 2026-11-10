@@ -20,7 +20,8 @@ remote subdirectory. Unknown keys are rejected so typos surface immediately.
 | `options` | `[]` | Extra `-o` options, e.g. `["ProxyJump=bastion", "Compression=yes"]` |
 | `multiplex` | `true` | Reuse one TCP connection across devsync's short sessions (ControlMaster). Sessions stay short either way |
 | `control_persist_secs` | `600` | Idle time before that shared connection closes. On high-latency links (VPNs, Tailscale relays) a long value avoids paying the connection setup again |
-| `connect_timeout_secs` | `10` | |
+| `connect_timeout_secs` | `30` | Time allowed to reach the server. If connecting times out, devsync doubles it for that host (up to 120 s, remembered for a day), since VPNs like Tailscale can take many seconds to find a route |
+| `persistent_shell` | `false` | `devsync shell` runs inside tmux on the remote (if installed): the shell and anything running in it survive disconnects, and reconnecting reattaches |
 | `response_timeout_secs` | `120` | Max wait for any single agent response before the session is abandoned and retried |
 
 Everything in `~/.ssh/config` (users, keys, jump hosts) applies as usual.

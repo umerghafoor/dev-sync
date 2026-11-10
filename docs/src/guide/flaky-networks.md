@@ -38,11 +38,25 @@ also listed one per line (all of them with `-v`). Set `DEVSYNC_NO_PROGRESS=1`
 to turn the live line off. With `--json`, `progress` events carry the same
 numbers.
 
+## Remote terminals
+
+`devsync shell` (and **Terminal** in VS Code) is the one place an ssh
+session stays open, so on a bad link it will drop. When it does, devsync
+says so and reconnects into the same folder, waiting longer each time
+(Ctrl-C to stop).
+
+To keep the shell itself, and whatever runs in it, alive across drops,
+set `ssh.persistent_shell = true`. With tmux installed on the remote, the
+shell runs in a tmux session (status bar hidden, mouse scrolling on) and
+reconnecting attaches to it again. For long jobs, `devsync exec` /
+`devsync submit` are still the most robust: they need no open connection
+at all.
+
 ## Tuning
 
 ```toml
 [ssh]
-connect_timeout_secs = 20       # slow links / satellite
+connect_timeout_secs = 60       # slow links / satellite (devsync also raises it by itself after a timeout)
 response_timeout_secs = 300     # huge trees on slow disks
 multiplex = true                # reuse one TCP connection for short sessions
 control_persist_secs = 600      # keep that connection this long when idle

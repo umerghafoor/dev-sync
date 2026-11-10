@@ -213,7 +213,7 @@ fn fake_ssh(dir: &Path, home: &Path) -> PathBuf {
     let p = dir.join("fake-ssh");
     let script = format!(
         r#"#!/bin/sh
-[ -f "{down}" ] && {{ echo "ssh: connect to host box: Network is unreachable" >&2; exit 255; }}
+[ -f "{down}" ] && {{ grep -q timeout "{down}" && echo "ssh: connect to host box port 22: Operation timed out" >&2 || echo "ssh: connect to host box: Network is unreachable" >&2; exit 255; }}
 # A broken shared (multiplexed) connection: sessions through it die silently.
 case " $* " in *ControlMaster=auto*) [ -n "$FAKE_SSH_BROKEN_MUX" ] && exit 255 ;; esac
 while [ $# -gt 0 ]; do
@@ -236,6 +236,65 @@ exec sh -c "$*"
     fs::write(&p, script).unwrap();
     fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
     p
+}
+
+#[test]
+fn shell_reconnects_and_slow_connects_get_more_time() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let home = base.join("remote-home");
+    let local = base.join("local");
+    fs::create_dir_all(home.join("proj")).unwrap();
+    fs::create_dir_all(&local).unwrap();
+    let ssh = fake_ssh(&base, &home);
+    // A unique host name keeps the learned timeout of this test separate.
+    let host = format!("me@box{}", std::process::id());
+    let run = |args: &[&str]| -> Output {
+        Command::new(bin())
+            .args(args)
+            .current_dir(&local)
+            .env("NO_COLOR", "1")
+            .env("DEVSYNC_SSH", &ssh)
+            .env("SHELL", "/bin/sh")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap()
+    };
+    ok(&run(&["init", &format!("{host}:~/proj")]));
+    let cfg = local.join(".devsync.toml");
+    fs::write(&cfg, fs::read_to_string(&cfg).unwrap().replace("multiplex = true", "multiplex = false")).unwrap();
+
+    // The link is down when the terminal opens and comes back 1.5 s later:
+    // the shell reconnects instead of exiting with 255.
+    let down = base.join("DOWN");
+    fs::write(&down, "").unwrap();
+    let restore = {
+        let down = down.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(1500));
+            fs::remove_file(down).unwrap();
+        })
+    };
+    let o = run(&["shell"]);
+    restore.join().unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert_eq!(o.status.code(), Some(0), "{err}");
+    assert!(err.contains("Reconnecting in"), "{err}");
+
+    // A connect timeout doubles the time allowed for that host next time.
+    fs::write(&down, "timeout").unwrap();
+    let o = run(&["--quiet", "status"]);
+    let _ = o;
+    let learned = std::path::PathBuf::from(format!("/tmp/devsync-{}", unsafe { libc_getuid() }))
+        .join(format!("connect-timeout-{}", host.replace(['@', '.'], "_")));
+    let secs: u32 = fs::read_to_string(&learned).unwrap().trim().parse().unwrap();
+    assert!(secs >= 60, "learned timeout {secs}");
+    let _ = fs::remove_file(learned);
+}
+
+extern "C" {
+    #[link_name = "getuid"]
+    fn libc_getuid() -> u32;
 }
 
 #[test]

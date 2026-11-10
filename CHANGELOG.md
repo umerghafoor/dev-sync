@@ -86,6 +86,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `devsync shell` (VS Code: Terminal) ended with exit 255 whenever the link
+  dropped or a shared connection was stale. It now reconnects into the same
+  folder with backoff; `ssh.persistent_shell = true` runs it in tmux on the
+  remote so it survives drops.
+- Slow VPN routes (e.g. Tailscale after idling) could exceed the 10 s connect
+  timeout on every attempt. The default is now 30 s, and a connect timeout
+  doubles the allowance for that host (up to 120 s, remembered for a day).
 - devsync's own state folders (`.devsync/`, `.devsync-agent/`) now contain a
   `.gitignore` of `*`, so they never show up in git status on either side.
 - Pulls appeared to start over every time on a flaky link. Now only one

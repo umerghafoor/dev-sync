@@ -37,6 +37,9 @@ pub struct SshSection {
     pub connect_timeout_secs: u32,
     /// Seconds to wait for any single agent response.
     pub response_timeout_secs: u32,
+    /// `devsync shell` inside tmux on the remote (if installed), so the
+    /// shell and what runs in it survive disconnects; reconnecting reattaches.
+    pub persistent_shell: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,8 +91,9 @@ impl Default for SshSection {
             options: Vec::new(),
             multiplex: true,
             control_persist_secs: 600,
-            connect_timeout_secs: 10,
+            connect_timeout_secs: 30,
             response_timeout_secs: 120,
+            persistent_shell: false,
         }
     }
 }
@@ -159,8 +163,9 @@ path = {path:?}          # project directory on the remote ("~" = remote home)
 # options = ["ProxyJump=bastion"]
 multiplex = true             # reuse one TCP connection for devsync's short sessions
 control_persist_secs = 600   # idle time before that connection is closed
-connect_timeout_secs = 10
+connect_timeout_secs = 30      # devsync raises it by itself if connecting times out
 response_timeout_secs = 120
+persistent_shell = false     # true: `devsync shell` runs in tmux on the remote and survives disconnects
 
 [sync]
 use_gitignore = false        # false: .gitignore'd files (.env, data, configs) are synced too

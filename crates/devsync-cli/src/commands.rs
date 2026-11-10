@@ -946,11 +946,42 @@ fn forward(g: &Global, ports: Vec<u16>) -> Result<i32> {
 
 fn shell() -> Result<i32> {
     let p = project()?;
-    let mut cmd = p.target().shell_command(&p.rel_cwd);
-    if p.config.remote.host == "local" {
+    let target = p.target();
+    let persistent = p.config.ssh.persistent_shell;
+    let devsync_transport::Endpoint::Ssh(ssh) = &target.endpoint else {
+        let mut cmd = target.shell_command(&p.rel_cwd, false);
         cmd.current_dir(devsync_agent::expand_root(&p.config.remote.path).join(&p.rel_cwd));
+        let st = cmd.status().context("cannot start shell")?;
+        return Ok(st.code().unwrap_or(1));
+    };
+    let h = Human::new(Verbosity::Normal, false);
+    // An interactive shell is one long ssh session, so on a flaky link it
+    // will drop. Instead of ending, reconnect into the same folder (and,
+    // with ssh.persistent_shell, the same tmux session).
+    let mut delay = std::time::Duration::from_secs(1);
+    loop {
+        let started = std::time::Instant::now();
+        let st = target.shell_command(&p.rel_cwd, persistent).status().context("cannot start ssh")?;
+        let _ = std::io::stdout().flush();
+        // Ctrl-C inside the shell is for the remote; don't treat it as ours.
+        devsync_client::INTERRUPTED.store(false, Ordering::SeqCst);
+        if st.code() != Some(255) {
+            return Ok(st.code().unwrap_or(1));
+        }
+        if started.elapsed() > std::time::Duration::from_secs(30) {
+            delay = std::time::Duration::from_secs(1); // was connected: retry fast
+        }
+        h.warn(&format!(
+            "connection to {} lost{}. Reconnecting in {}s (Ctrl-C to stop; slow links: devsync waits longer each time)",
+            ssh.host,
+            if persistent { "; your session keeps running there" } else { "" },
+            delay.as_secs()
+        ));
+        // The shared connection may be the broken part: start a fresh one.
+        ssh.close_shared_connection();
+        if devsync_client::sleep_interruptible(delay).is_err() {
+            return Ok(255);
+        }
+        delay = (delay * 2).min(std::time::Duration::from_secs(30));
     }
-    let st = cmd.status().context("cannot start shell")?;
-    let _ = std::io::stdout().flush();
-    Ok(st.code().unwrap_or(1))
 }

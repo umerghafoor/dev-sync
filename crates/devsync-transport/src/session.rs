@@ -351,7 +351,25 @@ pub fn connect(target: &Target, opts: &ConnectOptions) -> Result<Session, Transp
     }
 }
 
+/// Whether ssh gave up while still connecting (as opposed to a refused
+/// login or a dropped session).
+pub fn is_connect_timeout(stderr_or_msg: &str) -> bool {
+    let s = stderr_or_msg.to_ascii_lowercase();
+    s.contains("operation timed out") || s.contains("connection timed out") || s.contains("banner exchange")
+}
+
 fn connect_ssh(ssh: &SshConfig, target: &Target, opts: &ConnectOptions) -> Result<Session, TransportError> {
+    let r = connect_ssh_once(ssh, target, opts);
+    if let Err(e) = &r {
+        if is_connect_timeout(&e.to_string()) {
+            // Slow route (e.g. a VPN waking up): allow longer next time.
+            ssh.note_connect_timeout();
+        }
+    }
+    r
+}
+
+fn connect_ssh_once(ssh: &SshConfig, target: &Target, opts: &ConnectOptions) -> Result<Session, TransportError> {
     let cache = opts.cache_file.as_deref();
     if let Some(name) = load_cache(cache).and_then(|c| c.agent_name) {
         let s = Session::spawn(ssh_agent_command(ssh, &name, &target.root), opts.timeout)?;
