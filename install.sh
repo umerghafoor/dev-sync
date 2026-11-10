@@ -205,8 +205,15 @@ install_from_download() {
     if [ "$VERSION" = latest ]; then
         [ -z "${DEVSYNC_DOWNLOAD_BASE:-}" ] || die "--version is required with DEVSYNC_DOWNLOAD_BASE"
         say "looking up the latest release of ${REPO}…"
-        download "https://api.github.com/repos/$REPO/releases/latest" "$TMP/latest.json" \
-            || die "could not query GitHub releases (offline? rate-limited?). Try --version X.Y.Z"
+        if ! download "https://api.github.com/repos/$REPO/releases/latest" "$TMP/latest.json"; then
+            # 404 here means "no release yet" if the repository itself answers.
+            if download "https://api.github.com/repos/$REPO/releases?per_page=1" "$TMP/all.json" \
+                && ! grep -q '"tag_name"' "$TMP/all.json"; then
+                die "$REPO has no published release yet. Build from source instead (needs Rust, https://rustup.rs):
+  git clone https://github.com/$REPO && cd $(basename "$REPO") && sh install.sh"
+            fi
+            die "could not query GitHub releases (offline? rate-limited?). Try --version X.Y.Z"
+        fi
         VERSION=$(sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' "$TMP/latest.json" | head -1)
         [ -n "$VERSION" ] || die "could not determine the latest version"
     fi
