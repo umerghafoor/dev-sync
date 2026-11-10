@@ -4,348 +4,644 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>devsync — Edit locally, run remotely</title>
-<meta name="description" content="Write code on your machine, run it on a GPU server, lab box or VM. Commands survive dropped connections, transfers resume, results come back. Built for flaky networks.">
+<meta name="description" content="Write code on your machine, run it on a GPU server, lab box or VM. Commands survive dropped connections, transfers resume, results come back.">
 <meta property="og:title" content="devsync — Edit locally, run remotely">
-<meta property="og:description" content="Sync and remote execution built for flaky connections. Works with VS Code and coding agents like Claude Code.">
+<meta property="og:description" content="Sync and remote execution for flaky connections. Works with VS Code, git and Claude Code.">
 <link rel="icon" href="docs/assets/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #ffffff; --bg-2: #f6f7fb; --card: #ffffff; --line: #e4e7f0; --text: #0f172a; --muted: #5b6478;
-    --brand: #4f46e5; --brand-2: #2563eb; --brand-3: #06b6d4; --ok: #16a34a; --warn: #d97706; --err: #dc2626;
-    --term-bg: #0b1020; --term-text: #dbe2f4; --term-dim: #7d89a8;
-    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 12px 32px -12px rgba(15,23,42,.18);
-    --grad: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 55%, var(--brand-3) 100%);
-    --radius: 14px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #070b16; --bg-2: #0c1222; --card: #0f172a; --line: #1e293b; --text: #e6eaf5; --muted: #98a2bb;
-      --term-bg: #050813; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 20px 40px -16px rgba(0,0,0,.6);
-    }
+    --page: #f7f8fa; --paper: #ffffff; --ink: #15172a; --ink-2: #3c4053; --muted: #6b7083; --faint: #9a9fb0;
+    --line: #e5e7ec; --line-2: #eef0f3; --dot: #c9ccd4; --night: #15172a; --accent: #4f46e5;
+    --ok: #3f9d6b; --warn: #c27c0e; --bad: #d14343;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --frame: 1200px;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif; color: var(--text); background: var(--bg); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
   a { color: inherit; text-decoration: none; }
-  code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
-  @media (max-width: 600px) { .wrap { padding: 0 16px; } }
+  code, .mono { font-family: var(--mono); }
+
+  /* The frame: two vertical rules down the page, horizontal rules with dots where they cross. */
+  .frame { max-width: var(--frame); margin: 0 auto; border-left: 1px solid var(--line); border-right: 1px solid var(--line); position: relative; }
+  .rule { position: relative; height: 0; border-top: 1px solid var(--line); }
+  .rule::before, .rule::after { content: ""; position: absolute; top: -3px; width: 5px; height: 5px; border-radius: 50%; background: var(--dot); }
+  .rule::before { left: -3px; } .rule::after { right: -3px; }
+  @media (max-width: 1232px) { .frame { margin: 0 16px; } }
+  @media (max-width: 640px) { .frame { margin: 0; border: 0; } .rule::before, .rule::after { display: none; } }
 
   /* nav */
-  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: saturate(1.4) blur(12px); background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
-  nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -.02em; }
-  .brand img { width: 30px; height: 30px; }
-  nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14.5px; color: var(--muted); font-weight: 500; }
-  nav .links a:hover { color: var(--text); }
-  .btn { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; padding: 11px 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); transition: transform .15s ease, box-shadow .15s ease, border-color .15s; }
-  .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
-  .btn.primary { background: var(--grad); color: #fff; border: 0; box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--brand) 70%, transparent); }
-  .btn.sm { padding: 7px 13px; font-size: 14px; }
-  @media (max-width: 760px) { nav .links .hide-sm { display: none; } }
+  header.nav { position: sticky; top: 0; z-index: 20; background: rgba(247,248,250,.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  header.nav .in { max-width: var(--frame); margin: 0 auto; height: 56px; padding: 0 24px; display: flex; align-items: center; gap: 24px; }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; letter-spacing: -.02em; }
+  .logo img { width: 22px; height: 22px; }
+  .nav .links { display: flex; gap: 22px; font-size: 14px; color: var(--ink-2); margin: 0 auto; }
+  .nav .links a:hover { color: var(--ink); }
+  .nav .right { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .nav .right .txt { color: var(--ink-2); padding: 0 8px; }
+  @media (max-width: 760px) { .nav .links { display: none; } .nav .right { margin-left: auto; } .nav .right .txt { display: none; } }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 7px; font-size: 14px; font-weight: 500; border: 1px solid transparent; cursor: pointer; white-space: nowrap; }
+  .btn.dark { background: var(--ink); color: #fff; }
+  .btn.dark:hover { background: #2a2d45; }
+  .btn.light { background: #eceef2; color: var(--ink); }
+  .btn.light:hover { background: #e3e5ea; }
+  .btn.lg { height: 40px; padding: 0 18px; font-size: 14.5px; }
+
+  /* type */
+  h1, h2, h3 { font-weight: 500; letter-spacing: -.035em; margin: 0; color: var(--ink); }
+  h1 { font-size: clamp(40px, 6.2vw, 68px); line-height: 1.04; letter-spacing: -.045em; }
+  h2 { font-size: clamp(30px, 4.2vw, 48px); line-height: 1.08; letter-spacing: -.04em; }
+  h3 { font-size: 18px; line-height: 1.3; letter-spacing: -.02em; }
+  .lede { font-size: 17px; color: var(--muted); max-width: 520px; margin: 18px auto 0; }
 
   /* hero */
-  .hero { position: relative; overflow: hidden; padding: 72px 0 84px; }
-  .hero::before { content: ""; position: absolute; inset: -40% -10% auto; height: 760px; background:
-      radial-gradient(600px 300px at 18% 30%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 70%),
-      radial-gradient(520px 280px at 80% 20%, color-mix(in srgb, var(--brand-3) 20%, transparent), transparent 70%); pointer-events: none; }
-  .hero .wrap { position: relative; display: grid; grid-template-columns: 1.02fr 1fr; gap: 56px; align-items: center; }
-  @media (max-width: 980px) { .hero .wrap { grid-template-columns: 1fr; gap: 40px; } }
-  .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent); padding: 5px 12px; border-radius: 999px; }
-  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
-  h1 { font-size: clamp(38px, 5.4vw, 62px); line-height: 1.04; letter-spacing: -.035em; margin: 18px 0 18px; font-weight: 800; }
-  h1 .g { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .lead { font-size: 19px; color: var(--muted); max-width: 540px; margin: 0 0 28px; }
-  .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
-  .install { display: flex; align-items: center; gap: 10px; max-width: 560px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 10px 16px; box-shadow: var(--shadow); }
-  .install code { flex: 1; min-width: 0; font-size: 13.5px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-  .install code::-webkit-scrollbar { display: none; }
-  .install .prompt { color: var(--brand); user-select: none; }
-  .copy { flex: none; cursor: pointer; border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); border-radius: 8px; padding: 6px 10px; font: 600 12.5px Inter, sans-serif; }
-  .copy:hover { color: var(--text); }
-  .small-note { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .hero { padding: 88px 24px 0; text-align: center; position: relative; overflow: hidden; }
+  .hero .mark { width: 56px; height: 56px; margin: 0 auto 28px; display: block; }
+  .hero .ctas { display: flex; gap: 8px; justify-content: center; margin-top: 28px; }
+  .install { display: inline-flex; align-items: center; gap: 10px; margin-top: 18px; padding: 6px 6px 6px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font: 12.5px var(--mono); color: var(--ink-2); max-width: 100%; }
+  .install span { overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .install span::-webkit-scrollbar { display: none; }
+  .install b { color: var(--faint); font-weight: 400; }
+  .copy { border: 0; background: var(--line-2); color: var(--ink-2); font: 500 12px Inter, sans-serif; border-radius: 5px; padding: 5px 9px; cursor: pointer; flex: none; }
+  .copy:hover { background: var(--line); }
+  /* faint outlined shapes behind the hero, like a blueprint */
+  .ghost { position: absolute; border: 1px solid var(--line); border-radius: 18px; pointer-events: none; }
+  @media (max-width: 900px) { .ghost { display: none; } }
 
-  /* terminal */
-  .term { background: var(--term-bg); border-radius: 16px; box-shadow: 0 30px 80px -24px rgba(37,99,235,.45), 0 0 0 1px rgba(255,255,255,.06) inset; overflow: hidden; }
-  .term .bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: rgba(255,255,255,.04); border-bottom: 1px solid rgba(255,255,255,.06); }
-  .term .bar i { width: 11px; height: 11px; border-radius: 50%; display: block; }
-  .term .bar .t { margin-left: 10px; color: var(--term-dim); font: 500 12.5px Inter, sans-serif; }
-  .term .bar .net { margin-left: auto; font: 600 11.5px Inter, sans-serif; padding: 3px 9px; border-radius: 999px; transition: all .3s; }
-  .net.on { color: #4ade80; background: rgba(74,222,128,.12); }
-  .net.off { color: #fbbf24; background: rgba(251,191,36,.14); }
-  .term pre { margin: 0; padding: 18px 20px 22px; min-height: 360px; color: var(--term-text); font-size: 13px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
-  @media (max-width: 600px) { .term pre { font-size: 11.5px; min-height: 320px; padding: 14px; } }
-  .c-dim { color: var(--term-dim); } .c-ok { color: #4ade80; } .c-warn { color: #fbbf24; } .c-cy { color: #67e8f9; } .c-bl { color: #93c5fd; } .c-pr { color: #a5b4fc; } .c-b { font-weight: 700; color: #fff; }
-  .caret { display: inline-block; width: 8px; height: 15px; background: #93c5fd; vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+  /* product window */
+  .shot { max-width: 1000px; margin: 64px auto 0; background: var(--paper); border: 1px solid var(--line); border-bottom: 0; border-radius: 12px 12px 0 0;
+    box-shadow: 0 30px 60px -30px rgba(21,23,42,.18), 0 1px 0 rgba(21,23,42,.03); overflow: hidden; text-align: left; position: relative; }
+  .win-bar { height: 36px; display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: 1px solid var(--line-2); background: #fbfbfc; }
+  .win-bar i { width: 10px; height: 10px; border-radius: 50%; background: #e2e4e9; display: block; }
+  .win-bar .title { margin: 0 auto; font-size: 12px; color: var(--faint); transform: translateX(-20px); }
+  .win { display: grid; grid-template-columns: 44px 248px 1fr; min-height: 460px; }
+  .act { border-right: 1px solid var(--line-2); display: flex; flex-direction: column; align-items: center; gap: 18px; padding-top: 14px; color: #b3b7c3; }
+  .act svg { width: 20px; height: 20px; }
+  .act .on { color: var(--ink); position: relative; }
+  .act .on::before { content: ""; position: absolute; left: -12px; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }
+  .side { border-right: 1px solid var(--line-2); padding: 12px 12px; font-size: 12.5px; background: #fcfcfd; }
+  .side .h { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; color: var(--faint); text-transform: uppercase; margin: 4px 2px 8px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; background: var(--paper); padding: 9px 10px; margin-bottom: 10px; }
+  .st { display: flex; align-items: center; gap: 8px; }
+  .st .d { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; transition: background .3s; }
+  .st .d.off { background: var(--warn); }
+  .st b { font-weight: 600; font-size: 12.5px; }
+  .st small { display: block; color: var(--faint); font-size: 11px; }
+  .chips { display: flex; gap: 5px; margin-top: 7px; }
+  .chip { font-size: 10.5px; padding: 1px 7px; border-radius: 9px; background: var(--line-2); color: var(--ink-2); }
+  .retry { display: none; margin-top: 8px; align-items: center; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .retry.on { display: flex; }
+  .retry span:last-child { border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink); background: #f6f7f9; }
+  .prog .row1 { display: flex; justify-content: space-between; font-weight: 600; font-size: 12px; }
+  .meter { height: 4px; border-radius: 2px; background: var(--line-2); margin: 7px 0 6px; overflow: hidden; }
+  .meter div { height: 100%; width: 0; background: var(--ink); transition: width .2s linear; }
+  .prog .row2 { display: flex; justify-content: space-between; color: var(--faint); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .prog .file { font: 10.5px var(--mono); color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list .it { display: flex; align-items: center; gap: 7px; padding: 3px 2px; font-size: 12px; color: var(--ink-2); }
+  .list .it .k { width: 12px; text-align: center; font-weight: 600; font-size: 11px; }
+  .list .it .p { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list .it .m { color: var(--faint); font-size: 10.5px; }
+  .k.up { color: var(--accent); } .k.dn { color: var(--ok); } .k.M { color: var(--warn); } .k.A { color: var(--ok); }
+  .main { display: grid; grid-template-rows: 1fr 210px; min-width: 0; }
+  .editor { padding: 10px 0; font: 12.5px/1.75 var(--mono); color: #6b7083; overflow: hidden; border-bottom: 1px solid var(--line-2); }
+  .tabs { display: flex; font: 12px Inter, sans-serif; margin: -10px 0 8px; border-bottom: 1px solid var(--line-2); }
+  .tabs span { padding: 8px 14px; color: var(--faint); }
+  .tabs span.on { color: var(--ink); background: var(--paper); box-shadow: inset 0 -1px 0 var(--ink); }
+  .ln { display: flex; gap: 16px; padding: 0 16px; white-space: pre; }
+  .ln i { font-style: normal; color: #c3c7d0; width: 16px; text-align: right; flex: none; }
+  .kw { color: #7c3aed; } .fn { color: #2563eb; } .str { color: #0f766e; } .cm { color: #a3a8b5; }
+  .term { background: #15172a; color: #d9dcea; font: 12px/1.65 var(--mono); padding: 10px 16px; overflow: hidden; white-space: pre-wrap; }
+  .term .dim { color: #7d83a0; } .term .ok { color: #7fd3a1; } .term .warn { color: #f0b860; } .term .acc { color: #a5b4fc; }
+  .caret { display: inline-block; width: 7px; height: 13px; background: #a5b4fc; vertical-align: -2px; animation: blink 1s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
+  @media (max-width: 900px) { .win { grid-template-columns: 0 230px 1fr; } .act { display: none; } }
+  @media (max-width: 680px) { .win { grid-template-columns: 1fr; } .side { display: none; } .main { grid-template-rows: 260px; } .editor { display: none; } }
 
-  /* sections */
-  section { padding: 92px 0; }
-  section.alt { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--brand); }
-  h2 { font-size: clamp(28px, 3.6vw, 42px); line-height: 1.12; letter-spacing: -.03em; margin: 10px 0 14px; font-weight: 800; }
-  .sub { color: var(--muted); font-size: 18px; max-width: 680px; margin: 0; }
-  .head { margin-bottom: 44px; }
-  .head.center { text-align: center; } .head.center .sub { margin: 0 auto; }
+  /* dark statement band */
+  .band { background: var(--night); color: #fff; position: relative; overflow: hidden; }
+  .band .in { max-width: var(--frame); margin: 0 auto; border-left: 1px solid rgba(255,255,255,.07); border-right: 1px solid rgba(255,255,255,.07); padding: 150px 24px; text-align: center; position: relative; }
+  .band h2 { color: #fff; font-size: clamp(30px, 4.6vw, 52px); }
+  .band p { color: #9ea3bd; font-size: 17px; max-width: 560px; margin: 18px auto 0; }
+  .band svg.bg { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-  .pains { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-  @media (max-width: 860px) { .pains { grid-template-columns: 1fr; } }
-  .pain { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
-  .pain .x { font: 600 12.5px "JetBrains Mono", monospace; color: var(--err); background: color-mix(in srgb, var(--err) 9%, transparent); padding: 3px 8px; border-radius: 6px; display: inline-block; margin-bottom: 12px; }
-  .pain h3 { margin: 0 0 6px; font-size: 17px; }
-  .pain p { margin: 0; color: var(--muted); font-size: 15px; }
-  .fixline { margin-top: 26px; text-align: center; font-size: 18px; font-weight: 600; }
-  .fixline span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  /* section heads */
+  .sec-head { padding: 112px 24px 72px; text-align: center; }
+  .sec-head p { color: var(--muted); font-size: 17px; max-width: 580px; margin: 16px auto 0; }
 
-  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-  @media (max-width: 960px) { .features { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 620px) { .features { grid-template-columns: 1fr; } }
-  .feat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; transition: transform .2s, box-shadow .2s, border-color .2s; }
-  .feat:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
-  .ico { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: color-mix(in srgb, var(--brand) 11%, transparent); color: var(--brand); margin-bottom: 14px; }
-  .ico svg { width: 22px; height: 22px; }
-  .feat h3 { margin: 0 0 6px; font-size: 17px; letter-spacing: -.01em; }
-  .feat p { margin: 0; color: var(--muted); font-size: 15px; }
-  .feat code { font-size: 13px; background: var(--bg-2); padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); }
+  /* cell grids */
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid.inset { margin: 0 120px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .cell { border-right: 1px solid var(--line); position: relative; }
+  .grid .cell:nth-child(3n) { border-right: 0; }
+  .grid.inset .cell:nth-child(n+5) { border-right: 1px solid var(--line); }
+  .grid.inset .cell:last-child { border-right: 0; }
+  .cell .ill { height: 220px; background: var(--paper); border-bottom: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; position: relative; }
+  .cell .txt { padding: 26px 32px 40px; }
+  .cell .txt p { margin: 8px 0 0; color: var(--muted); font-size: 14.5px; }
+  .grid-row-rule { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+  @media (max-width: 1100px) { .grid.inset { margin: 0; border: 0; } }
+  @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } .cell, .grid.inset .cell:nth-child(n) { border-right: 0; border-bottom: 1px solid var(--line); } }
 
-  .split { display: grid; grid-template-columns: 1fr 1.1fr; gap: 56px; align-items: center; }
-  .split.rev { grid-template-columns: 1.1fr 1fr; }
-  @media (max-width: 960px) { .split, .split.rev { grid-template-columns: 1fr; gap: 32px; } .split.rev .media { order: 2; } }
-  .steps { list-style: none; padding: 0; margin: 26px 0 0; counter-reset: s; }
-  .steps li { position: relative; padding: 0 0 20px 50px; counter-increment: s; }
-  .steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff; background: var(--grad); }
-  .steps li:not(:last-child)::after { content: ""; position: absolute; left: 15.5px; top: 36px; bottom: 4px; width: 1px; background: var(--line); }
-  .steps b { display: block; font-size: 16px; }
-  .steps span { color: var(--muted); font-size: 15px; }
-  .media { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }
-  .media img { width: 100%; height: auto; display: block; border-radius: 10px; }
-  .media.light { background: #fff; }
-  .checks { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 12px; }
-  .checks li { display: flex; gap: 12px; color: var(--muted); font-size: 15.5px; }
-  .checks li b { color: var(--text); font-weight: 600; }
-  .checks svg { flex: none; width: 20px; height: 20px; color: var(--ok); margin-top: 2px; }
+  /* illustrations: small, precise UI pieces */
+  .mini { font-size: 12px; color: var(--ink-2); }
+  .mini .row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .mini .mono { font-size: 11.5px; }
+  .tag { font: 10.5px var(--mono); padding: 1px 6px; border-radius: 4px; background: var(--line-2); color: var(--ink-2); }
+  .tag.ok { background: #e8f5ee; color: var(--ok); } .tag.warn { background: #fbf1df; color: var(--warn); }
+  .faint { color: var(--faint); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; background: var(--paper); font-size: 12px; box-shadow: 0 1px 2px rgba(21,23,42,.04); }
+  .timeline { width: 260px; }
+  .timeline .bar { position: relative; height: 26px; }
+  .timeline .seg { position: absolute; top: 11px; height: 4px; border-radius: 2px; }
+  .timeline .lbl { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--faint); margin-top: 2px; }
+  .chk { width: 13px; height: 13px; border: 1px solid #c3c7d0; border-radius: 3px; display: inline-grid; place-items: center; flex: none; background: #fff; }
+  .chk.on { background: var(--ink); border-color: var(--ink); }
+  .chk.on::after { content: ""; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 1.5px 1.5px; transform: rotate(-45deg) translate(1px, -1px); }
+  .chk.part { background: var(--ink); border-color: var(--ink); }
+  .chk.part::after { content: ""; width: 6px; height: 1.5px; background: #fff; }
+  .diff { font: 11.5px/1.7 var(--mono); width: 270px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+  .diff div { padding: 0 10px; white-space: pre; }
+  .diff .del { background: #fdf0f0; color: #a33a3a; } .diff .add { background: #edf8f1; color: #2e7d55; } .diff .hd { background: #f6f7f9; color: var(--faint); font-family: Inter, sans-serif; font-size: 11px; padding: 4px 10px; border-bottom: 1px solid var(--line); }
 
-  .code { background: var(--term-bg); color: var(--term-text); border-radius: 14px; padding: 20px 22px; font-size: 13.5px; line-height: 1.75; overflow-x: auto; box-shadow: var(--shadow); margin: 0; }
+  /* list-style features (left index, right preview) */
+  .tabsec { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); border-top: 1px solid var(--line); }
+  .tabsec .idx { padding: 40px 0; border-right: 1px solid var(--line); }
+  .tabsec .idx button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 14px 40px; cursor: pointer; font-size: 18px; letter-spacing: -.02em; color: #b9bdc8; border-left: 2px solid transparent; }
+  .tabsec .idx button b { font-weight: 500; color: inherit; }
+  .tabsec .idx button.on { color: var(--ink); border-left-color: var(--ink); }
+  .tabsec .idx button.on b { color: var(--accent); }
+  .tabsec .idx button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .tabsec .pane { display: grid; place-items: center; padding: 48px; min-height: 420px; background: var(--paper); }
+  .tabsec .pane > div { display: none; width: 100%; max-width: 540px; min-width: 0; }
+  .tabsec .pane > div.on { display: block; }
+  @media (max-width: 860px) { .tabsec { grid-template-columns: minmax(0, 1fr); } .tabsec .idx { border-right: 0; border-bottom: 1px solid var(--line); padding: 16px 0; } .tabsec .idx button { padding: 10px 20px; font-size: 16px; } .tabsec .pane { padding: 24px 16px; } }
+  .codebox { background: #15172a; color: #d9dcea; border-radius: 10px; padding: 16px 18px; font: 12.5px/1.75 var(--mono); white-space: pre; overflow-x: auto; }
+  .codebox .dim { color: #7d83a0; } .codebox .ok { color: #7fd3a1; } .codebox .warn { color: #f0b860; } .codebox .acc { color: #a5b4fc; }
+  .panel { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 12.5px; background: #fff; }
+  .panel .ph { padding: 8px 12px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); background: #fbfbfc; border-bottom: 1px solid var(--line-2); display: flex; justify-content: space-between; }
+  .panel .pr { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line-2); }
+  .panel .pr .p { flex: 1; }
+  .panel .pr .s { color: var(--faint); font-size: 11.5px; }
+  .panel .inp { border-bottom: 1px solid var(--line-2); padding: 9px 12px; color: var(--faint); }
 
-  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
-  table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 720px; }
-  th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--line); }
-  th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; background: var(--bg-2); }
+  /* comparison */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 500; color: var(--muted); font-size: 13px; }
+  td:first-child { font-weight: 500; }
+  tr.us td { background: var(--paper); }
   tr:last-child td { border-bottom: 0; }
-  tr.us td { background: color-mix(in srgb, var(--brand) 6%, transparent); font-weight: 600; }
-  .y { color: var(--ok); font-weight: 700; } .n { color: var(--muted); } .p { color: var(--warn); font-weight: 600; }
+  .no { color: var(--faint); }
+  .tablewrap { overflow-x: auto; border-top: 1px solid var(--line); }
+  .tablewrap table { min-width: 760px; }
 
-  .qs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: q; }
-  @media (max-width: 900px) { .qs { grid-template-columns: 1fr; } }
-  .q { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
-  .q .n { font: 700 13px Inter, sans-serif; color: var(--brand); }
-  .q h3 { margin: 4px 0 12px; font-size: 17px; }
-  .q pre { margin: 0; background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; font-size: 13px; overflow-x: auto; }
-  .q p { color: var(--muted); font-size: 14.5px; margin: 10px 0 0; }
+  /* steps */
+  .num { font: 12px var(--mono); color: var(--faint); }
+  .steps pre { margin: 14px 0 0; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font: 12.5px/1.7 var(--mono); overflow-x: auto; }
+  .steps .txt { padding-top: 32px !important; }
 
-  .final { text-align: center; padding: 96px 0; position: relative; overflow: hidden; }
-  .final::before { content: ""; position: absolute; inset: 0; background: radial-gradient(500px 220px at 50% 0%, color-mix(in srgb, var(--brand) 18%, transparent), transparent 70%); pointer-events: none; }
-  .final .cta { justify-content: center; margin-top: 28px; }
-  footer { border-top: 1px solid var(--line); padding: 30px 0; color: var(--muted); font-size: 14px; }
-  footer .wrap { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
-  footer .links { margin-left: auto; display: flex; gap: 18px; }
-  footer a:hover { color: var(--text); }
+  .final { padding: 120px 24px; text-align: center; }
+  .final .ctas { display: flex; gap: 8px; justify-content: center; margin-top: 28px; }
+  footer { border-top: 1px solid var(--line); }
+  footer .in { max-width: var(--frame); margin: 0 auto; padding: 28px 24px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
+  footer .links { margin-left: auto; display: flex; gap: 20px; flex-wrap: wrap; }
+  footer a:hover { color: var(--ink); }
 
-  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
-  .reveal.in { opacity: 1; transform: none; }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .caret { animation: none; } html { scroll-behavior: auto; } }
+  /* ---- diagrams ---------------------------------------------------- */
+  .dia { display: grid; grid-template-columns: 1fr minmax(220px, 1.25fr) 1fr; align-items: center; gap: 0; max-width: 980px; margin: 0 auto; text-align: left; }
+  .node { border: 1px solid var(--line); background: var(--paper); border-radius: 12px; padding: 16px 18px; position: relative; z-index: 1; min-height: 170px; }
+  .node .nt { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+  .node .nt svg { width: 20px; height: 20px; color: var(--ink-2); flex: none; }
+  .node .ns { color: var(--faint); font-size: 12px; margin: 2px 0 12px 29px; }
+  .node .row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 3px 0; }
+  .node .row .mono { font-size: 11.5px; }
+  .jb { height: 4px; border-radius: 2px; background: var(--line-2); overflow: hidden; margin: 6px 0 4px; }
+  .jb div { height: 100%; width: 0; background: var(--ok); transition: width .5s linear, background .3s; }
+  .stat { font-size: 11.5px; color: var(--muted); min-height: 18px; transition: color .3s; }
+  .stat.bad { color: var(--bad); } .stat.good { color: var(--ok); } .stat.warn { color: var(--warn); }
+  .mid { position: relative; height: 170px; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 0 4px; }
+  .mid .cap { text-align: center; font-size: 11.5px; color: var(--faint); position: absolute; left: 0; right: 0; }
+  .mid .cap.top { top: 6px; } .mid .cap.bot { bottom: 6px; }
+  .wire { position: relative; height: 2px; background: var(--ink-2); margin: 0 -1px; transition: background .3s; }
+  .wire .pulse { position: absolute; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); animation: travel 1.6s linear infinite; }
+  .wire .pulse.b { animation-delay: .8s; }
+  @keyframes travel { from { left: 0; } to { left: calc(100% - 8px); } }
+  .cut { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 54px; height: 26px; display: grid; place-items: center; opacity: 0; transition: opacity .2s; }
+  .cut::before { content: ""; position: absolute; inset: 0; background: var(--paper); }
+  .cut span { position: relative; color: var(--bad); font-weight: 600; font-size: 16px; }
+  .broken .cut { opacity: 1; }
+  .broken .wire { background: var(--bad); }
+  .broken .wire .pulse { animation-play-state: paused; opacity: 0; }
+  .wifi-note { position: absolute; left: 50%; transform: translateX(-50%); top: calc(50% + 18px); font-size: 11.5px; color: var(--bad); font-weight: 500; opacity: 0; transition: opacity .2s; white-space: nowrap; }
+  .broken .wifi-note { opacity: 1; }
+
+  /* dark version for the problem band */
+  .band .dia { margin-top: 64px; }
+  .band .node { background: #1c1f36; border-color: #2b2f4a; color: #e6e8f2; }
+  .band .node .nt svg { color: #aab0cc; }
+  .band .node .ns { color: #7d83a0; }
+  .band .jb { background: #2b2f4a; }
+  .band .stat { color: #9ea3bd; } .band .stat.bad { color: #ff8b8b; }
+  .band .wire { background: #8b91ad; } .band .wire .pulse { background: #fff; }
+  .band .broken .wire { background: #ff8b8b; }
+  .band .cut::before { background: var(--night); } .band .cut span { color: #ff8b8b; }
+  .band .wifi-note { color: #ff8b8b; }
+  .band .mid .cap { color: #7d83a0; }
+  .fails { display: grid; grid-template-columns: repeat(3, 1fr); max-width: 980px; margin: 56px auto 0; border-top: 1px solid rgba(255,255,255,.08); text-align: left; }
+  .fails div { padding: 22px 24px 0; border-right: 1px solid rgba(255,255,255,.08); }
+  .fails div:last-child { border-right: 0; }
+  .fails b { display: block; color: #fff; font-weight: 500; font-size: 15px; }
+  .fails code { font-size: 12px; color: #ff8b8b; }
+  .fails p { margin: 6px 0 0; color: #9ea3bd; font-size: 14px; }
+
+  /* idea diagram: three short sessions */
+  .lane { position: relative; height: 30px; border-radius: 8px; border: 1px dashed var(--line); display: flex; align-items: center; padding: 0 10px; font-size: 11.5px; color: var(--faint); transition: all .3s; overflow: hidden; }
+  .lane .pk { position: absolute; top: 50%; transform: translateY(-50%); height: 20px; padding: 0 9px; border-radius: 6px; background: var(--ink); color: #fff; font-size: 11px; display: flex; align-items: center; white-space: nowrap; opacity: 0; }
+  .lane.go .pk { opacity: 1; animation: send 1.1s ease-in-out forwards; }
+  .lane.back .pk { opacity: 1; animation: recv 1.1s ease-in-out forwards; background: var(--ok); }
+  @keyframes send { from { left: 6px; } to { left: calc(100% - 6px); transform: translate(-100%, -50%); } }
+  @keyframes recv { from { left: calc(100% - 6px); transform: translate(-100%, -50%); } to { left: 6px; transform: translate(0, -50%); } }
+  .lane.go, .lane.back { border-style: solid; border-color: var(--ink-2); color: transparent; }
+  .lane.done { border-style: solid; color: var(--ok); }
+  .offline .lane { border-color: #f1c9c9; color: var(--bad); }
+  .idea-steps { display: grid; grid-template-columns: repeat(5, 1fr); max-width: 980px; margin: 40px auto 0; border-top: 1px solid var(--line); }
+  .idea-steps div { padding: 16px 14px 0 0; font-size: 13px; color: var(--faint); transition: color .3s; }
+  .idea-steps div b { display: block; font: 500 11px var(--mono); margin-bottom: 4px; }
+  .idea-steps div.on { color: var(--ink); }
+  .idea-steps div.on b { color: var(--accent); }
+  @media (max-width: 860px) {
+    .dia { grid-template-columns: 1fr; gap: 10px; }
+    .mid { height: auto; padding: 26px 0; }
+    .mid .cap.top { top: 0; } .mid .cap.bot { bottom: 0; }
+    .fails { grid-template-columns: 1fr; } .fails div { border-right: 0; padding-bottom: 18px; }
+    .idea-steps { grid-template-columns: 1fr; } .idea-steps div { padding: 8px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { .wire .pulse { animation: none; } .caret { animation: none; } html { scroll-behavior: auto; } .meter div { transition: none; } }
 </style>
 </head>
 <body>
 
-<nav>
-  <div class="wrap">
-    <a class="brand" href="./"><img src="docs/assets/logo.svg" alt="">devsync</a>
-    <div class="links">
-      <a href="#features" class="hide-sm">Features</a>
-      <a href="#how" class="hide-sm">How it works</a>
-      <a href="#vscode" class="hide-sm">VS Code</a>
+<header class="nav">
+  <div class="in">
+    <a class="logo" href="./"><img src="docs/assets/logo.svg" alt="">devsync</a>
+    <nav class="links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="docs/guide/vscode.html">VS Code</a>
       <a href="docs/">Docs</a>
-    </div>
-    <a class="btn sm" href="https://github.com/umerghafoor/dev-sync">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      GitHub
-    </a>
-  </div>
-</nav>
-
-<header class="hero">
-  <div class="wrap">
-    <div>
-      <span class="pill"><span class="dot"></span>Built for networks that drop</span>
-      <h1>Write code here.<br><span class="g">Run it there.</span></h1>
-      <p class="lead">devsync keeps your editing local and fast, and runs your code on a GPU server, lab machine or cloud VM. When the connection drops, your command keeps running and your changes wait. Nothing freezes.</p>
-      <div class="cta">
-        <a class="btn primary" href="docs/quick-start.html">Get started
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
-        <a class="btn" href="docs/">Read the docs</a>
-      </div>
-      <div class="install">
-        <code><span class="prompt">$ </span><span id="install-cmd">curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh</span></code>
-        <button class="copy" data-copy="install-cmd">Copy</button>
-      </div>
-      <p class="small-note">macOS and Linux · nothing to install on the remote · MIT licensed</p>
-    </div>
-
-    <div class="term" aria-label="Animated terminal: devsync runs a test over a connection that drops and recovers">
-      <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="t">~/project — zsh</span><span class="net on" id="net">● online</span></div>
-      <pre id="screen"></pre>
+    </nav>
+    <div class="right">
+      <a class="txt" href="https://github.com/umerghafoor/dev-sync">GitHub</a>
+      <a class="btn dark" href="docs/installation.html">Install</a>
     </div>
   </div>
 </header>
 
-<section class="alt">
-  <div class="wrap">
-    <div class="head center reveal">
-      <div class="eyebrow">The problem</div>
-      <h2>Remote development breaks when the link does</h2>
-      <p class="sub">On hotel Wi-Fi, a VPN or a tethered phone, the usual tools fail in the worst way: they take your work down with them.</p>
+<div class="frame">
+  <section class="hero">
+    <div class="ghost" style="left:-60px;top:120px;width:160px;height:120px"></div>
+    <div class="ghost" style="left:40px;top:300px;width:120px;height:160px"></div>
+    <div class="ghost" style="right:-40px;top:90px;width:180px;height:110px"></div>
+    <div class="ghost" style="right:60px;top:260px;width:110px;height:150px"></div>
+    <img class="mark" src="docs/assets/logo.svg" alt="">
+    <h1>Edit locally.<br>Run remotely.</h1>
+    <p class="lede">Write code on your laptop, run it on the GPU box, lab machine or cloud VM. When the connection drops, nothing freezes and nothing dies.</p>
+    <div class="ctas">
+      <a class="btn dark lg" href="docs/quick-start.html">Get started</a>
+      <a class="btn light lg" href="docs/">Read the docs</a>
     </div>
-    <div class="pains">
-      <div class="pain reveal"><span class="x">Remote-SSH</span><h3>The editor freezes</h3><p>Your files live on the server, so every keystroke waits on the network. Lose the link and you lose the editor.</p></div>
-      <div class="pain reveal"><span class="x">ssh host cmd</span><h3>The command dies</h3><p>A two-hour training run is tied to one SSH session. One dropped packet too many and it's gone.</p></div>
-      <div class="pain reveal"><span class="x">rsync + ssh</span><h3>Everything by hand</h3><p>Copy, ssh, run, copy the results back, remember what changed. Again, after every edit.</p></div>
+    <div class="install"><span id="cmd"><b>$ </b>curl -fsSL https://raw.githubusercontent.com/umerghafoor/dev-sync/main/install.sh | sh</span><button class="copy" data-copy="cmd">Copy</button></div>
+
+    <!-- Product window: editor + devsync sidebar + terminal, animated. -->
+    <div class="shot" aria-label="devsync in VS Code: a training run keeps going while the connection drops">
+      <div class="win-bar"><i></i><i></i><i></i><span class="title">train.py — project</span></div>
+      <div class="win">
+        <div class="act">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 8v8M18 10c0 4-6 3-10 7"/></svg>
+          <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 9h12l-3-3M19 15H7l3 3"/></svg></span>
+        </div>
+        <div class="side">
+          <div class="h">devsync</div>
+          <div class="card">
+            <div class="st"><span class="d" id="dot"></span><div><b id="state">In sync</b><small>me@gpu-box:~/project</small></div></div>
+            <div class="chips"><span class="chip">1 running</span></div>
+            <div class="retry" id="retry"><span id="retry-in">Next try in 4s</span><span>Retry now</span></div>
+          </div>
+          <div class="card prog" id="prog" style="display:none">
+            <div class="row1"><span>Pushing to remote</span><span id="pct">0%</span></div>
+            <div class="meter"><div id="fill"></div></div>
+            <div class="row2"><span id="files">57 / 61 files here</span><span id="bytes">0 KB / 38 KB</span></div>
+            <div class="file" id="pfile">src/model.py</div>
+          </div>
+          <div class="h" style="margin-top:14px">Activity</div>
+          <div class="list" id="activity">
+            <div class="it"><span class="k dn">↓</span><span class="p">results/metrics.json</span><span class="m">2m</span></div>
+            <div class="it"><span class="k up">↑</span><span class="p">configs/base.yaml</span><span class="m">5m</span></div>
+          </div>
+        </div>
+        <div class="main">
+          <div class="editor">
+            <div class="tabs"><span class="on">train.py</span><span>model.py</span><span>base.yaml</span></div>
+            <div class="ln"><i>1</i><span><span class="kw">import</span> torch</span></div>
+            <div class="ln"><i>2</i><span><span class="kw">from</span> model <span class="kw">import</span> Net</span></div>
+            <div class="ln"><i>3</i><span></span></div>
+            <div class="ln"><i>4</i><span><span class="kw">def</span> <span class="fn">train</span>(epochs: int = <span class="str">3</span>):</span></div>
+            <div class="ln"><i>5</i><span>    net = Net().cuda()  <span class="cm"># runs on the remote GPU</span></span></div>
+            <div class="ln"><i>6</i><span>    <span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(epochs):</span></div>
+            <div class="ln"><i>7</i><span>        loss, acc = step(net, loader)</span></div>
+            <div class="ln"><i>8</i><span>        <span class="fn">print</span>(<span class="str">f"epoch {epoch+1}/{epochs}  loss {loss:.3f}"</span>)</span></div>
+          </div>
+          <div class="term" id="screen"></div>
+        </div>
+      </div>
     </div>
-    <p class="fixline reveal"><span>devsync does all of it in one step, and survives the drop.</span></p>
+  </section>
+</div>
+
+<section class="band">
+  <svg class="bg" aria-hidden="true" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1200 520">
+    <g fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1.2">
+      <g transform="translate(150 70)"><path d="M0 60a110 110 0 0 1 150 0M28 92a70 70 0 0 1 94 0M54 122a32 32 0 0 1 42 0"/><circle cx="75" cy="150" r="7"/><path d="M-10 -10 160 170"/></g>
+      <g transform="translate(900 300)"><path d="M0 60a110 110 0 0 1 150 0M28 92a70 70 0 0 1 94 0M54 122a32 32 0 0 1 42 0"/><circle cx="75" cy="150" r="7"/><path d="M-10 -10 160 170"/></g>
+      <rect x="470" y="40" width="260" height="70" rx="14"/><rect x="60" y="360" width="200" height="90" rx="14"/><rect x="980" y="60" width="160" height="110" rx="14"/>
+    </g>
+  </svg>
+  <div class="in" style="padding-top:120px;padding-bottom:110px">
+    <h2>SSH breaks when the Wi-Fi does</h2>
+    <p>The usual way to work on a remote machine hangs everything on one long SSH connection. On hotel Wi-Fi, a VPN or a train, that connection drops, and it takes your work with it.</p>
+
+    <div class="dia" id="dia-problem" aria-label="Diagram: one long SSH session; when the Wi-Fi drops, the remote job is killed and the editor freezes">
+      <div class="node">
+        <div class="nt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>Your laptop</div>
+        <div class="ns">editor · terminal</div>
+        <div class="row mono">$ ssh gpu-box python train.py</div>
+        <div class="stat" id="p-local">typing…</div>
+      </div>
+      <div class="mid">
+        <div class="cap top">one long SSH connection</div>
+        <div class="wire"><i class="pulse"></i><i class="pulse b"></i></div>
+        <div class="cut"><span>✕</span></div>
+        <div class="wifi-note">Wi-Fi drops</div>
+      </div>
+      <div class="node">
+        <div class="nt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5"/><path d="M8 6.5h.01M8 17.5h.01"/></svg>Remote GPU box</div>
+        <div class="ns">where the code runs</div>
+        <div class="row mono">python train.py</div>
+        <div class="jb"><div id="p-bar"></div></div>
+        <div class="stat" id="p-remote">running · epoch 1/3</div>
+      </div>
+    </div>
+
+    <div class="fails">
+      <div><b>The editor freezes</b><code>VS Code Remote-SSH</code><p>Your files live on the server, so every keystroke waits for the network.</p></div>
+      <div><b>The command dies</b><code>ssh host cmd</code><p>The process is tied to the session. When the session goes, so does the two-hour run.</p></div>
+      <div><b>Everything by hand</b><code>rsync + ssh</code><p>Copy, connect, run, copy results back, and start over when it drops halfway.</p></div>
+    </div>
   </div>
 </section>
 
-<section id="features">
-  <div class="wrap">
-    <div class="head reveal">
-      <div class="eyebrow">Features</div>
-      <h2>Feels local. Runs remote.</h2>
-      <p class="sub">One command sends your changes, runs on the remote in the matching folder, streams the output and brings results back.</p>
+<div class="frame">
+  <div class="sec-head" id="how"><h2>The idea: short trips, not one long call</h2><p>devsync never keeps a connection open. Each step is a separate, quick SSH session that's safe to retry, and your command runs on its own on the remote. A drop just means waiting a moment.</p></div>
+  <div style="padding:0 24px 96px">
+    <div class="dia" id="dia-idea" aria-label="Diagram: devsync sends changes, starts the job detached, and collects results in separate short sessions; the job keeps running while offline">
+      <div class="node">
+        <div class="nt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>Your laptop</div>
+        <div class="ns">edit at full speed, always</div>
+        <div class="row"><span class="mono">train.py</span><span class="faint" id="i-edit">saved</span></div>
+        <div class="stat" id="i-local">devsync: in sync</div>
+      </div>
+      <div class="mid" style="gap:10px">
+        <div class="lane" id="l1">short session · send changed files<span class="pk">↑ 2 files · 6 KB</span></div>
+        <div class="lane" id="l2">short session · start the job<span class="pk">▶ python train.py</span></div>
+        <div class="lane" id="l3">short session · collect results<span class="pk">↓ output · exit 0 · model.pt</span></div>
+      </div>
+      <div class="node">
+        <div class="nt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5"/><path d="M8 6.5h.01M8 17.5h.01"/></svg>Remote GPU box</div>
+        <div class="ns">devsync agent · nothing installed</div>
+        <div class="row mono">python train.py <span class="faint" style="font-family:Inter">detached</span></div>
+        <div class="jb"><div id="i-bar"></div></div>
+        <div class="stat" id="i-remote">idle</div>
+      </div>
     </div>
-    <div class="features">
-      <div class="feat reveal"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div><h3>Edit at full speed</h3><p>Files stay on your machine. Any editor, any tool, no lag, even with no network at all.</p></div>
-      <div class="feat reveal"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></div><h3>Commands outlive the connection</h3><p>Jobs run detached on the remote. A dropped link only delays the output; the exit code is always collected.</p></div>
-      <div class="feat reveal"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div><h3>Transfers resume</h3><p>Interrupted uploads and downloads continue where they stopped, and only changed files move.</p></div>
-      <div class="feat reveal"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div><h3>Results come back</h3><p>Output, exit code and files your command generated come home. Your own edits are never overwritten.</p></div>
-      <div class="feat reveal"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></div><h3>Zero remote setup</h3><p>Just SSH. devsync uploads its own small static agent, checks it, and keeps it up to date.</p></div>
-      <div class="feat reveal"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z"/><path d="M19 17l.8 1.9L22 20l-2.2 1-.8 2-.8-2-2.2-1 2.2-1.1z"/></svg></div><h3>Works with coding agents</h3><p>A Claude Code hook routes tests, builds and installs to the remote while the agent edits locally. <code>devsync setup claude</code></p></div>
-    </div>
-  </div>
-</section>
-
-<section id="how" class="alt">
-  <div class="wrap split">
-    <div class="reveal">
-      <div class="eyebrow">How it works</div>
-      <h2>Short sessions, nothing to lose</h2>
-      <p class="sub">devsync never holds a long-lived connection you could lose. Every exchange is a quick SSH session.</p>
-      <ol class="steps">
-        <li><b>Sync what changed</b><span>Files are hashed and compared, so only changes are sent, compressed and resumable.</span></li>
-        <li><b>Start the job detached</b><span>The command starts on the remote under a supervisor and keeps running without you.</span></li>
-        <li><b>Collect the results</b><span>Output, exit code and generated files are fetched whenever the link allows.</span></li>
-      </ol>
-    </div>
-    <div class="media light reveal"><img src="docs/assets/architecture.svg" alt="Diagram: local editor and agent, devsync client, short SSH sessions, remote agent running detached jobs" loading="lazy"></div>
-  </div>
-</section>
-
-<section id="vscode">
-  <div class="wrap split rev">
-    <div class="media reveal"><img src="docs/assets/vscode-panel.svg" alt="The devsync panel in VS Code" loading="lazy"></div>
-    <div class="reveal">
-      <div class="eyebrow">VS Code extension</div>
-      <h2>A panel that feels like Git</h2>
-      <p class="sub">Everything the CLI does, one click away in the Activity Bar.</p>
-      <ul class="checks">
-        <li><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm3.7-9.3a1 1 0 0 0-1.4-1.4L9 10.6 7.7 9.3a1 1 0 0 0-1.4 1.4l2 2a1 1 0 0 0 1.4 0l4-4z"/></svg><span><b>Run on Remote</b> from a command box, or in the background with results when done</span></li>
-        <li><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm3.7-9.3a1 1 0 0 0-1.4-1.4L9 10.6 7.7 9.3a1 1 0 0 0-1.4 1.4l2 2a1 1 0 0 0 1.4 0l4-4z"/></svg><span><b>Live progress</b> for every push and pull: files, speed, time left, and an activity list</span></li>
-        <li><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm3.7-9.3a1 1 0 0 0-1.4-1.4L9 10.6 7.7 9.3a1 1 0 0 0-1.4 1.4l2 2a1 1 0 0 0 1.4 0l4-4z"/></svg><span><b>Not on Remote Yet</b> with A/M/D badges, conflicts with side-by-side compare</span></li>
-        <li><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm3.7-9.3a1 1 0 0 0-1.4-1.4L9 10.6 7.7 9.3a1 1 0 0 0-1.4 1.4l2 2a1 1 0 0 0 1.4 0l4-4z"/></svg><span><b>Remote Files</b>: browse a huge remote and tick the folders you want</span></li>
-        <li><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm3.7-9.3a1 1 0 0 0-1.4-1.4L9 10.6 7.7 9.3a1 1 0 0 0-1.4 1.4l2 2a1 1 0 0 0 1.4 0l4-4z"/></svg><span><b>Auto sync</b> on save, with <b>Retry now</b> when you're offline</span></li>
-      </ul>
-      <div class="cta" style="margin-top:26px"><a class="btn" href="docs/guide/vscode.html">VS Code guide →</a></div>
+    <div class="idea-steps" id="i-steps">
+      <div><b>01</b>Only changed files go up</div>
+      <div><b>02</b>The job starts on its own</div>
+      <div><b>03</b>Wi-Fi drops: the job keeps running</div>
+      <div><b>04</b>Back online: devsync catches up</div>
+      <div><b>05</b>Output, exit code and files come back</div>
     </div>
   </div>
-</section>
-
-<section class="alt">
-  <div class="wrap split">
-    <div class="reveal">
-      <div class="eyebrow">Big projects</div>
-      <h2>A 50 GB remote? Pick what you need.</h2>
-      <p class="sub">devsync looks before it leaps. On a large remote it asks what to sync instead of downloading everything, and folders you skip are never even scanned.</p>
-      <div class="cta" style="margin-top:26px"><a class="btn" href="docs/guide/syncing.html#choosing-what-to-sync-large-projects">Choosing what to sync →</a></div>
+  <div class="rule"></div>
+  <div class="grid">
+    <div class="cell">
+      <div class="ill">
+        <div class="mini" style="width:250px">
+          <div class="row"><span style="color:var(--accent);font-weight:600;width:12px">↑</span><span class="mono" style="flex:1">src/model.py</span><span class="faint">4.1 KB</span></div>
+          <div class="row"><span style="color:var(--accent);font-weight:600;width:12px">↑</span><span class="mono" style="flex:1">configs/base.yaml</span><span class="faint">612 B</span></div>
+          <div class="row faint"><span style="width:12px">·</span><span class="mono" style="flex:1">data/ (31 GB)</span><span>not synced</span></div>
+          <div class="row faint"><span style="width:12px">·</span><span class="mono" style="flex:1">59 unchanged files</span><span>skipped</span></div>
+        </div>
+      </div>
+      <div class="txt"><h3>Only changes move</h3><p>Files are hashed and compared. Only what changed is sent, compressed, and an interrupted transfer resumes where it stopped.</p></div>
     </div>
-    <pre class="code reveal"><span class="c-dim">$</span> devsync tree
+    <div class="cell">
+      <div class="ill">
+        <div class="timeline">
+          <div class="mini" style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="mono">python train.py</span><span class="tag ok">running</span></div>
+          <div class="bar"><div class="seg" style="left:0;width:100%;background:var(--ink)"></div></div>
+          <div class="bar" style="margin-top:-6px">
+            <div class="seg" style="left:0;width:38%;background:#c9ccd4"></div>
+            <div class="seg" style="left:38%;width:24%;background:repeating-linear-gradient(90deg,#e8b65b 0 4px,transparent 4px 8px)"></div>
+            <div class="seg" style="left:62%;width:38%;background:#c9ccd4"></div>
+          </div>
+          <div class="lbl"><span>job on remote</span><span style="color:var(--warn)">link down</span><span>your laptop</span></div>
+        </div>
+      </div>
+      <div class="txt"><h3>Jobs outlive the connection</h3><p>Commands start detached on the remote. A dropped link only delays the output; the job keeps running and its exit code is kept.</p></div>
+    </div>
+    <div class="cell">
+      <div class="ill">
+        <div class="mini" style="width:250px">
+          <div class="row"><span class="tag ok">exit 0</span><span class="faint">3m 12s on gpu-box</span></div>
+          <div class="row"><span style="color:var(--ok);font-weight:600;width:12px">↓</span><span class="mono" style="flex:1">checkpoints/model.pt</span><span class="faint">48 MB</span></div>
+          <div class="row"><span style="color:var(--ok);font-weight:600;width:12px">↓</span><span class="mono" style="flex:1">results/metrics.json</span><span class="faint">2 KB</span></div>
+          <div class="row"><span class="tag warn">kept</span><span class="mono faint">train.py</span><span class="faint">— you edited it</span></div>
+        </div>
+      </div>
+      <div class="txt"><h3>Results come back</h3><p>Output, exit code and the files your command wrote come home. Files you edited meanwhile are never overwritten.</p></div>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="sec-head" id="features"><h2>Everything you'd do over SSH</h2><p>Without babysitting the connection.</p></div>
+  <div class="rule"></div>
+  <div class="grid inset">
+    <div class="cell">
+      <div class="ill">
+        <div class="mini" style="width:230px">
+          <div class="row"><span class="chk"></span><span class="mono" style="flex:1">data/</span><span class="faint">≥ 31.2 GB</span></div>
+          <div class="row"><span class="chk part"></span><span class="mono" style="flex:1">models/</span><span class="faint">1.7 GB</span></div>
+          <div class="row"><span class="chk on"></span><span class="mono" style="flex:1">notebooks/</span><span class="faint">25 MB</span></div>
+          <div class="row"><span class="chk on"></span><span class="mono" style="flex:1">src/</span><span class="faint">4.1 MB</span></div>
+        </div>
+      </div>
+      <div class="txt"><h3>Huge remotes, your choice</h3><p>Browse a 50 GB project folder by folder and tick what to sync. Skipped folders aren't even scanned.</p></div>
+    </div>
+    <div class="cell">
+      <div class="ill">
+        <div class="diff">
+          <div class="hd">train.py — Remote ↔ Local</div>
+          <div class="del">-    lr = 1e-3</div>
+          <div class="add">+    lr = 3e-4</div>
+          <div>     opt = Adam(net.parameters(), lr)</div>
+        </div>
+      </div>
+      <div class="txt"><h3>Diffs like Git</h3><p>Click any change to compare it with the remote's copy before you send it.</p></div>
+    </div>
+    <div class="cell">
+      <div class="ill">
+        <div style="display:grid;gap:10px;justify-items:center">
+          <span class="pill"><span style="width:7px;height:7px;border-radius:50%;background:var(--warn)"></span>Offline · next try in 4s</span>
+          <span class="pill" style="font-weight:500">Retry now</span>
+        </div>
+      </div>
+      <div class="txt"><h3>Built for bad links</h3><p>Changes queue while you're offline and go out with backoff, or right away when you say so.</p></div>
+    </div>
+    <div class="grid-row-rule"></div>
+    <div class="cell">
+      <div class="ill">
+        <div class="mini" style="width:250px">
+          <div class="row"><span class="faint" style="width:52px">agent</span><span class="mono">pytest -x</span></div>
+          <div class="row"><span class="faint" style="width:52px">hook</span><span class="mono">devsync exec -- 'pytest -x'</span></div>
+          <div class="row"><span class="faint" style="width:52px">result</span><span class="tag ok">42 passed</span><span class="faint">on gpu-box</span></div>
+        </div>
+      </div>
+      <div class="txt"><h3>Coding agents included</h3><p>A Claude Code hook sends tests, builds and installs to the remote while the agent edits locally.</p></div>
+    </div>
+    <div class="cell">
+      <div class="ill">
+        <div class="mini" style="width:240px">
+          <div class="row"><span class="mono" style="font-weight:500">main</span><span class="faint">↓1 ↑2 · remote</span></div>
+          <div class="row"><span style="color:var(--warn);font-weight:600;width:12px">M</span><span class="mono" style="flex:1">src/model.py</span><span class="faint">staged</span></div>
+          <div class="row"><span style="color:var(--ok);font-weight:600;width:12px">U</span><span class="mono" style="flex:1">notes.md</span></div>
+          <div class="row"><span class="pill" style="padding:3px 9px;font-size:11px">⌘↵ Commit on remote</span></div>
+        </div>
+      </div>
+      <div class="txt"><h3>The remote's git, here</h3><p>Stage, commit, switch branches, pull and push the remote repository from VS Code's Source Control.</p></div>
+    </div>
+    <div class="cell">
+      <div class="ill">
+        <div class="mini" style="width:250px">
+          <div class="row"><span class="faint" style="width:72px">remote</span><span class="mono">linux / x86_64</span></div>
+          <div class="row"><span class="faint" style="width:72px">agent</span><span class="mono">uploaded · 1.7 MB</span><span class="tag ok">verified</span></div>
+          <div class="row"><span class="faint" style="width:72px">installs</span><span class="mono">none</span></div>
+        </div>
+      </div>
+      <div class="txt"><h3>Nothing to install there</h3><p>Just SSH. devsync uploads its own small static agent, checks it, and replaces it when you upgrade.</p></div>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="sec-head"><h2>Works where you already work</h2></div>
+  <div class="tabsec" id="tabs">
+    <div class="idx" role="tablist">
+      <button class="on" data-t="0" role="tab"><b>Terminal</b> Run anything remotely</button>
+      <button data-t="1" role="tab"><b>VS Code</b> A panel that feels like Git</button>
+      <button data-t="2" role="tab"><b>Git</b> The remote repo, from here</button>
+      <button data-t="3" role="tab"><b>Agents</b> Claude Code runs remotely</button>
+      <button data-t="4" role="tab"><b>Big projects</b> Sync only what you need</button>
+    </div>
+    <div class="pane">
+      <div class="on"><div class="codebox"><span class="dim">$</span> devsync exec -- pytest -x
+<span class="dim">[devsync]</span> pushing 2 file(s), 6.3 KB
+<span class="dim">[devsync]</span>   <span class="acc">↑</span> src/model.py <span class="dim">4.1 KB</span>
+<span class="dim">[devsync]</span>   <span class="acc">↑</span> tests/test_model.py <span class="dim">2.2 KB</span>
+<span class="dim">[devsync]</span> <span class="ok">synced 2 file(s), 6.3 KB in 0.8s</span>
+============ <span class="ok">42 passed</span> in 3.12s ============
+
+<span class="dim">$</span> devsync submit -- python train.py
+<span class="dim">[devsync]</span> <span class="ok">started job 7f3a (runs on its own; no connection is kept open)</span></div></div>
+      <div><div class="panel">
+        <div class="ph"><span>Source control · devsync</span><span>4 actions</span></div>
+        <div class="inp">Command to run on the remote (⌘Enter)</div>
+        <div class="ph"><span>Not on remote yet</span><span>2</span></div>
+        <div class="pr"><span style="color:var(--warn);font-weight:600">M</span><span class="p mono">train.py</span><span class="s">⇄ diff</span></div>
+        <div class="pr"><span style="color:var(--ok);font-weight:600">A</span><span class="p mono">configs/fast.yaml</span></div>
+        <div class="ph"><span>Remote jobs</span><span>2</span></div>
+        <div class="pr"><span style="color:var(--accent)">…</span><span class="p mono">python train.py --epochs 50</span><span class="s">running</span></div>
+        <div class="pr" style="border-bottom:0"><span style="color:var(--ok)">✓</span><span class="p mono">pytest -x</span><span class="s">exit 0 · 3m ago</span></div>
+      </div></div>
+      <div><div class="codebox"><span class="dim">$</span> devsync git status --short
+ M src/model.py
+?? notes.md
+<span class="dim">$</span> devsync git commit -am "tune lr"
+[main 4e1c2a9] tune lr
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+<span class="dim">$</span> devsync git checkout -b experiment
+Switched to a new branch 'experiment'</div></div>
+      <div><div class="codebox"><span class="dim">$</span> devsync setup claude
+
+<span class="dim"># Claude Code edits files locally. Its commands are routed:</span>
+pytest -x           <span class="dim">→</span> <span class="acc">devsync exec -- 'pytest -x'</span>
+pip install -e .    <span class="dim">→</span> <span class="acc">devsync exec -- 'pip install -e .'</span>
+git status          <span class="dim">→ stays local</span></div></div>
+      <div><div class="codebox"><span class="dim">$</span> devsync tree
 me@gpu-box:~/project/
-  <span class="c-dim">[ ]</span> <span class="c-b">data/</span>                            <span class="c-warn">≥   31.2 GB  ≥ 88388 files</span>
-  <span class="c-dim">[ ]</span> <span class="c-b">models/</span>                              1.7 GB    214 files
-  <span class="c-ok">[x]</span> <span class="c-b">notebooks/</span>                          25.2 MB    41 files
-  <span class="c-ok">[x]</span> <span class="c-b">src/</span>                                 4.1 MB    512 files
+  [ ] data/        <span class="warn">≥   31.2 GB  ≥ 88388 files</span>
+  [~] models/           1.7 GB    214 files
+  [x] notebooks/       25.2 MB     41 files
+  [x] src/              4.1 MB    512 files
 
-<span class="c-dim">$</span> devsync select models/checkpoints --pull
-<span class="c-cy">↓ pulling ██████████████░░░░░░░░░░</span>  58% <span class="c-dim">12/20 files here  412.0 MB / 708.0 MB  9.8 MB/s  30s left</span></pre>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <div class="head center reveal">
-      <div class="eyebrow">Compared</div>
-      <h2>Made for exactly this workflow</h2>
-      <p class="sub">Edit here, run there, over an unreliable link. Other good tools cover parts of it.</p>
-    </div>
-    <div class="tablewrap reveal">
-      <table>
-        <thead><tr><th></th><th>Edit locally</th><th>Survives disconnects</th><th>Runs commands</th><th>Results back</th><th>Remote install</th></tr></thead>
-        <tbody>
-          <tr class="us"><td>devsync</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes, conflict-safe</td><td class="y">None (automatic)</td></tr>
-          <tr><td>VS Code Remote-SSH</td><td class="n">No</td><td class="n">No, editor freezes</td><td class="y">Yes</td><td class="n">n/a</td><td>VS Code server</td></tr>
-          <tr><td>ssh host cmd</td><td class="n">n/a</td><td class="n">No, command dies</td><td class="y">Yes</td><td class="n">No</td><td>None</td></tr>
-          <tr><td>rsync + watcher</td><td class="y">Yes</td><td class="p">Retry by hand</td><td class="n">No</td><td class="p">By hand</td><td>rsync</td></tr>
-          <tr><td>Mutagen</td><td class="y">Yes</td><td class="y">Yes</td><td class="n">No</td><td class="p">Two-way sync</td><td>Automatic agent</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p style="text-align:center;margin-top:16px"><a href="docs/comparison.html" style="color:var(--brand);font-weight:600">Full comparison →</a></p>
-  </div>
-</section>
-
-<section class="alt" id="start">
-  <div class="wrap">
-    <div class="head center reveal">
-      <div class="eyebrow">Quick start</div>
-      <h2>Running remotely in a minute</h2>
-      <p class="sub">All you need is SSH access to the remote machine.</p>
-    </div>
-    <div class="qs">
-      <div class="q reveal"><div class="n">01</div><h3>Connect a project</h3><pre>cd my-project
-devsync init me@gpu-box:~/my-project</pre><p>Works with any host in <code>~/.ssh/config</code>. An empty folder pulls the remote's code first.</p></div>
-      <div class="q reveal"><div class="n">02</div><h3>Run on the remote</h3><pre>devsync exec -- pytest -x
-devsync exec -- python train.py</pre><p>Changes are sent first. Output streams back; the exit code is yours.</p></div>
-      <div class="q reveal"><div class="n">03</div><h3>Keep it in sync</h3><pre>devsync watch
-devsync setup claude</pre><p>Push on every save, and let Claude Code run commands remotely.</p></div>
+<span class="dim">$</span> devsync select models/checkpoints --pull
+<span class="acc">↓ pulling ██████████████░░░░░░░░░░</span>  58% <span class="dim">12/20 files here</span></div></div>
     </div>
   </div>
-</section>
+  <div class="rule"></div>
 
-<div class="final">
-  <div class="wrap">
-    <h2 class="reveal">Stop fighting the connection.</h2>
-    <p class="sub reveal" style="margin:0 auto">Edit at full speed, run where the hardware is, and let devsync handle the network.</p>
-    <div class="cta reveal">
-      <a class="btn primary" href="docs/installation.html">Install devsync</a>
-      <a class="btn" href="https://github.com/umerghafoor/dev-sync">Star on GitHub</a>
+  <div class="sec-head"><h2>Compared</h2><p>Other good tools cover parts of this workflow. devsync covers the whole loop.</p></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>Edit locally</th><th>Survives disconnects</th><th>Runs commands</th><th>Results back</th><th>Remote install</th></tr></thead>
+      <tbody>
+        <tr class="us"><td>devsync</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes, conflict-safe</td><td>None</td></tr>
+        <tr><td>VS Code Remote-SSH</td><td class="no">No</td><td class="no">Editor freezes</td><td>Yes</td><td class="no">—</td><td>VS Code server</td></tr>
+        <tr><td>ssh host cmd</td><td class="no">—</td><td class="no">Command dies</td><td>Yes</td><td class="no">No</td><td>None</td></tr>
+        <tr><td>rsync + watcher</td><td>Yes</td><td class="no">Retry by hand</td><td class="no">No</td><td class="no">By hand</td><td>rsync</td></tr>
+        <tr><td>Mutagen</td><td>Yes</td><td>Yes</td><td class="no">No</td><td class="no">Two-way sync</td><td>Agent</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="rule"></div>
+
+  <div class="sec-head"><h2>Start in a minute</h2><p>All you need is SSH access to the machine.</p></div>
+  <div class="rule"></div>
+  <div class="grid steps">
+    <div class="cell"><div class="txt"><span class="num">01</span><h3 style="margin-top:6px">Connect a folder</h3><pre>devsync init me@gpu-box:~/project</pre><p>Any host from <code>~/.ssh/config</code> works. An empty folder pulls the remote's code first.</p></div></div>
+    <div class="cell"><div class="txt"><span class="num">02</span><h3 style="margin-top:6px">Run on the remote</h3><pre>devsync exec -- python train.py</pre><p>Your changes go first. Output streams back and the exit code is yours.</p></div></div>
+    <div class="cell"><div class="txt"><span class="num">03</span><h3 style="margin-top:6px">Keep it in sync</h3><pre>devsync watch</pre><p>Or install the VS Code extension and let auto sync do it on every save.</p></div></div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="final">
+    <h2>Stop fighting the connection</h2>
+    <p class="lede">Free and open source, MIT licensed.</p>
+    <div class="ctas">
+      <a class="btn dark lg" href="docs/installation.html">Install devsync</a>
+      <a class="btn light lg" href="https://github.com/umerghafoor/dev-sync">View on GitHub</a>
     </div>
   </div>
 </div>
 
 <footer>
-  <div class="wrap">
-    <a class="brand" href="./" style="font-size:16px"><img src="docs/assets/logo.svg" alt="" style="width:24px;height:24px">devsync</a>
+  <div class="in">
+    <a class="logo" href="./" style="font-size:14px"><img src="docs/assets/logo.svg" alt="" style="width:18px;height:18px">devsync</a>
     <span>MIT licensed</span>
     <div class="links">
       <a href="docs/">Documentation</a>
@@ -357,80 +653,154 @@ devsync setup claude</pre><p>Push on every save, and let Claude Code run command
 </footer>
 
 <script>
-  // Copy buttons
   document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
-    const text = document.getElementById(b.dataset.copy).textContent;
+    const text = document.getElementById(b.dataset.copy).textContent.replace(/^\$ /, "");
     try { await navigator.clipboard.writeText(text); b.textContent = "Copied"; } catch { b.textContent = "Select & copy"; }
     setTimeout(() => (b.textContent = "Copy"), 1600);
   }));
 
-  // Scroll reveal
-  const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => es.forEach((e) => {
-    if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-  }), { threshold: 0.12 }) : null;
-  document.querySelectorAll(".reveal").forEach((el) => io ? io.observe(el) : el.classList.add("in"));
+  // Feature tabs
+  const tabs = document.querySelectorAll("#tabs .idx button");
+  const panes = document.querySelectorAll("#tabs .pane > div");
+  tabs.forEach((t) => t.addEventListener("click", () => {
+    tabs.forEach((x) => x.classList.toggle("on", x === t));
+    panes.forEach((p, i) => p.classList.toggle("on", String(i) === t.dataset.t));
+  }));
 
-  // Terminal demo: a test run that survives a dropped connection.
-  const screen = document.getElementById("screen");
-  const net = document.getElementById("net");
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const bar = (pct) => { const f = Math.round(pct / 100 * 22); return "█".repeat(f) + "░".repeat(22 - f); };
-  const D = "c-dim";
-  // Each step: [kind, content, delay]
-  const steps = [
-    ["type", "devsync exec -- python train.py --epochs 3", 0],
-    ["line", `<span class="${D}">[devsync]</span> pushing 4 file(s), 38.2 KB`, 500],
-    ["progress", null, 0],
-    ["line", `<span class="${D}">[devsync]</span> <span class="c-ok">synced 4 file(s), 38.2 KB in 0.9s</span>`, 200],
-    ["line", `<span class="c-pr">epoch 1/3</span>  loss 0.912  acc 0.71`, 900],
-    ["net", "off", 700],
-    ["line", `<span class="c-warn">[devsync] network problem (connection reset) — retry #1 in 2.0s</span>`, 300],
-    ["line", `<span class="c-warn">[devsync] network problem (connection timed out) — retry #2 in 4.0s</span>`, 1400],
-    ["line", `<span class="${D}"># meanwhile the job keeps running on gpu-box</span>`, 300],
-    ["net", "on", 1300],
-    ["line", `<span class="c-pr">epoch 2/3</span>  loss 0.534  acc 0.84`, 300],
-    ["line", `<span class="c-pr">epoch 3/3</span>  loss 0.318  acc 0.91`, 700],
-    ["line", `saved checkpoints/model.pt`, 400],
-    ["line", `<span class="${D}">[devsync]</span>   <span class="c-bl">↓</span> checkpoints/model.pt <span class="${D}">48.1 MB</span>`, 500],
-    ["line", `<span class="${D}"># exit code 0, output kept in .devsync/jobs/</span>`, 400],
-    ["type", "", 600],
-  ];
-  const prompt = '<span class="c-ok">➜</span> <span class="c-cy">project</span> ';
-  let html = "";
+  // Product window: push with progress, run, connection drops, job continues, results come back.
+  const $ = (id) => document.getElementById(id);
+  const screen = $("screen");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const render = (extra = "") => (screen.innerHTML = html + extra);
+  const P = '<span class="ok">➜</span> <span class="acc">project</span> ';
+  let html = "";
+  const show = (extra = "") => { screen.innerHTML = html + extra; };
+  const line = (s) => { html += s + "\n"; show(); };
+  const setState = (label, offline) => {
+    $("state").textContent = label;
+    $("dot").classList.toggle("off", offline);
+    $("retry").classList.toggle("on", offline);
+  };
+  const addActivity = (k, p, m) => {
+    const el = document.createElement("div");
+    el.className = "it";
+    el.innerHTML = `<span class="k ${k}">${k === "up" ? "↑" : "↓"}</span><span class="p">${p}</span><span class="m">${m}</span>`;
+    const list = $("activity");
+    list.insertBefore(el, list.firstChild);
+    while (list.children.length > 5) list.removeChild(list.lastChild);
+  };
+  async function type(cmd) {
+    let t = "";
+    for (const ch of cmd) { t += ch; show(P + t + '<span class="caret"></span>'); await sleep(28 + Math.random() * 36); }
+    await sleep(220);
+    html += P + t + "\n"; show();
+  }
   async function play() {
-    html = "";
-    net.className = "net on"; net.textContent = "● online";
-    for (const [kind, content, delay] of steps) {
-      await sleep(delay);
-      if (kind === "type") {
-        let typed = "";
-        for (const ch of content) { typed += ch; render(prompt + typed + '<span class="caret"></span>'); await sleep(32 + Math.random() * 40); }
-        if (!content) { render(prompt + '<span class="caret"></span>'); await sleep(3200); break; }
-        await sleep(250);
-        html += prompt + typed + "\n";
-        render();
-      } else if (kind === "line") {
-        html += content + "\n"; render();
-      } else if (kind === "net") {
-        net.className = "net " + content;
-        net.textContent = content === "on" ? "● online" : "● offline";
-      } else if (kind === "progress") {
-        for (let p = 0; p <= 100; p += 5) {
-          render(`<span class="c-cy">↑ pushing ${bar(p)}</span> ${String(p).padStart(3)}% <span class="${D}">${57 + Math.min(4, Math.floor(p / 25))}/61 files here  ${(38.2 * p / 100).toFixed(1)} KB / 38.2 KB</span>\n`);
-          await sleep(45);
-        }
+    for (;;) {
+      html = ""; setState("In sync", false); $("prog").style.display = "none";
+      show(P + '<span class="caret"></span>');
+      await sleep(900);
+      await type("devsync exec -- python train.py --epochs 3");
+      line('<span class="dim">[devsync]</span> pushing 4 file(s), 38.2 KB');
+      setState("Syncing…", false);
+      $("prog").style.display = "";
+      const files = ["src/model.py", "src/data.py", "configs/base.yaml", "train.py"];
+      for (let p = 0; p <= 100; p += 4) {
+        const f = Math.min(3, Math.floor(p / 25));
+        $("pct").textContent = p + "%"; $("fill").style.width = p + "%";
+        $("files").textContent = (57 + Math.floor(p / 25)) + " / 61 files here";
+        $("bytes").textContent = (38.2 * p / 100).toFixed(1) + " KB / 38.2 KB";
+        $("pfile").textContent = files[f];
+        const n = Math.round(p / 100 * 20);
+        show(`<span class="acc">↑ pushing ${"█".repeat(n)}${"░".repeat(20 - n)}</span> ${String(p).padStart(3)}%\n`);
+        await sleep(40);
       }
+      files.forEach((f) => addActivity("up", f, "now"));
+      $("prog").style.display = "none";
+      line('<span class="dim">[devsync]</span> <span class="ok">synced 4 file(s), 38.2 KB in 0.9s</span>');
+      setState("In sync", false);
+      await sleep(800);
+      line("epoch 1/3  loss 0.912  acc 0.71");
+      await sleep(900);
+      setState("Offline — changes queued", true);
+      line('<span class="warn">[devsync] network problem (connection reset) — retry #1 in 2.0s</span>');
+      for (let s = 4; s > 0; s--) { $("retry-in").textContent = "Next try in " + s + "s"; await sleep(520); }
+      line('<span class="warn">[devsync] network problem (connection timed out) — retry #2 in 4.0s</span>');
+      line('<span class="dim"># the job keeps running on gpu-box</span>');
+      for (let s = 4; s > 0; s--) { $("retry-in").textContent = "Next try in " + s + "s"; await sleep(420); }
+      setState("In sync", false);
+      line("epoch 2/3  loss 0.534  acc 0.84");
+      await sleep(500);
+      line("epoch 3/3  loss 0.318  acc 0.91");
+      await sleep(600);
+      line('<span class="dim">[devsync]</span>   <span class="ok">↓</span> checkpoints/model.pt <span class="dim">48.1 MB</span>');
+      addActivity("dn", "checkpoints/model.pt", "now");
+      await sleep(400);
+      show(P + '<span class="caret"></span>');
+      show(html + P + '<span class="caret"></span>');
+      await sleep(4200);
     }
-    play();
   }
   if (reduced) {
-    html = prompt + "devsync exec -- python train.py --epochs 3\n";
-    for (const [k, c] of steps) if (k === "line") html += c + "\n";
-    render();
+    html = P + "devsync exec -- python train.py --epochs 3\n" +
+      '<span class="dim">[devsync]</span> <span class="ok">synced 4 file(s), 38.2 KB in 0.9s</span>\nepoch 1/3  loss 0.912  acc 0.71\n' +
+      '<span class="warn">[devsync] network problem (connection reset) — retry #1 in 2.0s</span>\nepoch 2/3  loss 0.534  acc 0.84\nepoch 3/3  loss 0.318  acc 0.91\n' +
+      '<span class="dim">[devsync]</span>   <span class="ok">↓</span> checkpoints/model.pt <span class="dim">48.1 MB</span>\n';
+    show();
   } else {
     play();
+  }
+
+  // ---- diagrams --------------------------------------------------------
+  const dp = document.getElementById("dia-problem");
+  async function problemLoop() {
+    for (;;) {
+      dp.classList.remove("broken");
+      $("p-local").textContent = "typing…"; $("p-local").className = "stat";
+      $("p-remote").className = "stat"; $("p-bar").style.background = "";
+      for (let w = 0; w <= 55; w += 5) { $("p-bar").style.width = w + "%"; $("p-remote").textContent = "running · epoch " + (1 + Math.floor(w / 30)) + "/3"; await sleep(260); }
+      dp.classList.add("broken");
+      await sleep(500);
+      $("p-remote").textContent = "killed — the session closed"; $("p-remote").className = "stat bad";
+      $("p-bar").style.background = "var(--bad)";
+      $("p-local").textContent = "frozen · reconnecting…"; $("p-local").className = "stat bad";
+      await sleep(3400);
+    }
+  }
+  const di = document.getElementById("dia-idea");
+  const lanes = ["l1", "l2", "l3"].map((id) => $(id));
+  const stepEls = [...document.querySelectorAll("#i-steps div")];
+  const setStep = (n) => stepEls.forEach((e, i) => e.classList.toggle("on", i === n));
+  const lane = (el, mode) => { el.classList.remove("go", "back", "done"); void el.offsetWidth; if (mode) el.classList.add(mode); };
+  async function ideaLoop() {
+    for (;;) {
+      di.classList.remove("offline"); lanes.forEach((l) => lane(l));
+      $("i-bar").style.width = "0%"; $("i-remote").textContent = "idle"; $("i-remote").className = "stat";
+      $("i-local").textContent = "devsync: in sync"; $("i-local").className = "stat"; $("i-edit").textContent = "edited";
+      setStep(0); await sleep(500);
+      lane(lanes[0], "go"); await sleep(1200); lane(lanes[0], "done"); $("i-edit").textContent = "sent";
+      setStep(1); lane(lanes[1], "go"); await sleep(1200); lane(lanes[1], "done");
+      $("i-remote").textContent = "running · epoch 1/3"; $("i-remote").className = "stat good";
+      for (let w = 0; w <= 30; w += 5) { $("i-bar").style.width = w + "%"; await sleep(200); }
+      setStep(2); di.classList.add("offline"); lanes.forEach((l) => lane(l));
+      $("i-local").textContent = "offline · next try in 4s"; $("i-local").className = "stat warn";
+      for (let w = 35; w <= 75; w += 5) { $("i-bar").style.width = w + "%"; $("i-remote").textContent = "still running · epoch " + (1 + Math.floor(w / 34)) + "/3"; await sleep(260); }
+      setStep(3); di.classList.remove("offline");
+      $("i-local").textContent = "back online"; $("i-local").className = "stat good";
+      for (let w = 80; w <= 100; w += 5) { $("i-bar").style.width = w + "%"; await sleep(160); }
+      $("i-remote").textContent = "finished · exit 0"; $("i-remote").className = "stat good";
+      setStep(4); lane(lanes[2], "back"); await sleep(1200); lane(lanes[2], "done");
+      $("i-local").textContent = "results here: model.pt, output.log"; $("i-local").className = "stat good";
+      await sleep(3200);
+    }
+  }
+  if (!reduced) {
+    problemLoop(); ideaLoop();
+  } else {
+    dp.classList.add("broken"); $("p-bar").style.width = "55%"; $("p-bar").style.background = "var(--bad)";
+    $("p-remote").textContent = "killed — the session closed"; $("p-remote").className = "stat bad";
+    $("p-local").textContent = "frozen · reconnecting…"; $("p-local").className = "stat bad";
+    $("i-bar").style.width = "100%"; $("i-remote").textContent = "finished · exit 0"; stepEls.forEach((e) => e.classList.add("on"));
   }
 </script>
 </body>
