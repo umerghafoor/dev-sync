@@ -61,10 +61,16 @@ pub enum Event {
     /// Transfer progress (throttled to a few updates per second).
     Progress {
         direction: Direction,
-        /// File being transferred.
+        /// File being transferred, and how far along it is.
         path: String,
+        file_done: u64,
+        file_size: u64,
+        /// Files of this transfer completed / planned.
         files_done: usize,
         files_total: usize,
+        /// Files that were already in sync before it started (not counted
+        /// above), so "here / in project" = (already + done) / (already + total).
+        files_already: usize,
         bytes_done: u64,
         bytes_total: u64,
     },
@@ -133,6 +139,7 @@ pub struct Transfer<'a> {
     files_total: usize,
     bytes_total: u64,
     files_done: usize,
+    files_already: usize,
     bytes_done: u64,
     path: String,
     file_base: u64,
@@ -150,12 +157,19 @@ impl<'a> Transfer<'a> {
             files_total,
             bytes_total,
             files_done: 0,
+            files_already: 0,
             bytes_done: 0,
             path: String::new(),
             file_base: 0,
             file_size: 0,
             last: None,
         }
+    }
+
+    /// Files already in sync before this transfer (shown as done).
+    pub fn already(mut self, n: usize) -> Self {
+        self.files_already = n;
+        self
     }
 
     /// Starts a file of `size` bytes, of which `already` were sent earlier
@@ -193,8 +207,11 @@ impl<'a> Transfer<'a> {
         self.rep.event(Event::Progress {
             direction: self.direction,
             path: self.path.clone(),
+            file_done: self.bytes_done - self.file_base,
+            file_size: self.file_size,
             files_done: self.files_done,
             files_total: self.files_total,
+            files_already: self.files_already,
             bytes_done: self.bytes_done,
             bytes_total: self.bytes_total,
         });

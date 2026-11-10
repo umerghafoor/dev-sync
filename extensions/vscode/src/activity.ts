@@ -9,8 +9,12 @@ export interface TransferView {
   /** "checking remote files", "uploading", … */
   stage: string;
   path: string;
+  /** Files here / in the project (includes those already in sync). */
   filesDone: number;
   filesTotal: number;
+  /** Current file: bytes done / size. */
+  fileDone: number;
+  fileSize: number;
   bytesDone: number;
   bytesTotal: number;
   /** Bytes per second (0 = not measured yet). */
@@ -33,7 +37,6 @@ const KEEP = 100;
 export class Activity implements vscode.Disposable {
   transfer?: TransferView;
   recent: ActivityEntry[] = [];
-  private already = 0;
   private rateFrom?: { at: number; bytes: number; direction: string };
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChange = this.emitter.event;
@@ -54,7 +57,7 @@ export class Activity implements vscode.Disposable {
         if (this.transfer && this.transfer.direction === "none") this.set({ ...this.transfer, stage: `connecting to ${e.host}` });
         return true;
       case "pull_planned":
-        this.already = e.already;
+        // The counts arrive with each progress event.
         return true;
       case "progress": {
         const now = Date.now();
@@ -67,13 +70,15 @@ export class Activity implements vscode.Disposable {
           direction: e.direction,
           stage: e.direction === "up" ? "pushing" : "pulling",
           path: e.path,
-          filesDone: e.files_done,
-          filesTotal: e.files_total,
+          filesDone: e.files_already + e.files_done,
+          filesTotal: e.files_already + e.files_total,
+          fileDone: e.file_done,
+          fileSize: e.file_size,
           bytesDone: e.bytes_done,
           bytesTotal: e.bytes_total,
           rate,
           eta: rate > 0 ? Math.max(0, (e.bytes_total - e.bytes_done) / rate) : -1,
-          already: e.direction === "down" ? this.already : 0,
+          already: e.files_already,
         });
         return true;
       }
@@ -105,7 +110,6 @@ export class Activity implements vscode.Disposable {
   /** The operation finished (or failed): hide the progress shortly after. */
   end(): void {
     this.rateFrom = undefined;
-    this.already = 0;
     if (this.clearTimer) clearTimeout(this.clearTimer);
     if (!this.transfer) return;
     if (this.transfer.direction !== "none") {
@@ -123,7 +127,7 @@ export class Activity implements vscode.Disposable {
   }
 
   private blank(): TransferView {
-    return { direction: "none", stage: "", path: "", filesDone: 0, filesTotal: 0, bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1, already: 0 };
+    return { direction: "none", stage: "", path: "", filesDone: 0, filesTotal: 0, fileDone: 0, fileSize: 0, bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1, already: 0 };
   }
 
   private set(t: TransferView | undefined): void {

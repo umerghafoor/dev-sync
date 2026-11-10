@@ -162,7 +162,7 @@ class Controller implements vscode.Disposable {
     if (detail) tip.appendText(`${detail}\n\n`);
     if (t && t.direction !== "none") {
       tip.appendText(
-        `${t.direction === "up" ? "Pushing" : "Pulling"} ${t.filesDone}/${t.filesTotal} files, ` +
+        `${t.direction === "up" ? "Pushing" : "Pulling"}: ${t.filesDone}/${t.filesTotal} files here, ` +
           `${formatBytes(Math.min(t.bytesDone, t.bytesTotal))} of ${formatBytes(t.bytesTotal)}` +
           `${t.rate > 0 ? ` at ${formatBytes(t.rate)}/s` : ""}\n${t.path}\n\n`,
       );
@@ -469,7 +469,9 @@ class Controller implements vscode.Disposable {
             const name = e.path.split("/").pop() ?? e.path;
             progress.report({
               increment: Math.max(0, pct - shown),
-              message: `${e.files_done}/${e.files_total} files · ${formatBytes(Math.min(e.bytes_done, e.bytes_total))} / ${formatBytes(e.bytes_total)} · ${name}`,
+              message: `${e.files_already + e.files_done}/${e.files_already + e.files_total} files here · ${formatBytes(Math.min(e.bytes_done, e.bytes_total))} / ${formatBytes(e.bytes_total)} · ${name}${
+                e.file_size >= 1048576 ? ` (${formatBytes(Math.min(e.file_done, e.file_size))} / ${formatBytes(e.file_size)})` : ""
+              }`,
             });
             shown = Math.max(shown, pct);
           }

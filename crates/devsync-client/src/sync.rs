@@ -342,7 +342,7 @@ fn pull_remote(
         conflicts: keep_both.len(),
         already,
     });
-    let mut prog = Transfer::new(rep, Direction::Down, take.len() + keep_both.len(), total_bytes);
+    let mut prog = Transfer::new(rep, Direction::Down, take.len() + keep_both.len(), total_bytes).already(already);
     if !opts.dry_run {
         rep.event(Event::Stage { stage: Stage::Download, message: "downloading".into() });
     }
@@ -637,7 +637,8 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
         files.iter().zip(offsets.iter()).map(|(e, o)| (e.path.as_str(), (*o).min(e.size))).collect();
 
     stage(rep, Stage::Upload, "uploading");
-    let mut prog = Transfer::new(rep, Direction::Up, plan.upload.len(), plan.upload_bytes());
+    let unchanged = local.len().saturating_sub(plan.upload.len());
+    let mut prog = Transfer::new(rep, Direction::Up, plan.upload.len(), plan.upload_bytes()).already(unchanged);
     let mut pipe = Pipe { s: &mut s, inflight: 0 };
     for e in &plan.upload {
         let resumed = offset_of.get(e.path.as_str()).copied().unwrap_or(0);

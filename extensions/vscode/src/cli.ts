@@ -201,8 +201,11 @@ export type DevsyncEvent =
       event: "progress";
       direction: "up" | "down";
       path: string;
+      file_done: number;
+      file_size: number;
       files_done: number;
       files_total: number;
+      files_already: number;
       bytes_done: number;
       bytes_total: number;
     }

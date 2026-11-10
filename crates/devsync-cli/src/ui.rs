@@ -73,7 +73,8 @@ impl Human {
         b.shown = true;
     }
 
-    fn progress(&self, dir: Direction, path: &str, files: (usize, usize), done: u64, total: u64) {
+    /// `files` = (here, in project); `file` = (done, size) of the current file.
+    fn progress(&self, dir: Direction, path: &str, files: (usize, usize), file: (u64, u64), done: u64, total: u64) {
         if !self.live || self.terse {
             return;
         }
@@ -114,7 +115,7 @@ impl Human {
             Direction::Down => ("↓", "pulling"),
         };
         let mut line = format!(
-            "{} {} {pct:>3.0}% {}/{} files  {} / {}",
+            "{} {} {pct:>3.0}% {}/{} files here  {} / {}",
             self.paint("36", &format!("{arrow} {verb}")),
             self.paint("36", &meter),
             files.0,
@@ -129,7 +130,13 @@ impl Human {
             line.push_str(&format!("  {} left", duration(eta)));
         }
         if !path.is_empty() {
-            line.push_str(&format!("  {}", self.paint("2", path)));
+            // Big files: show their own progress so the line never looks stuck.
+            let part = if file.1 >= 1024 * 1024 {
+                format!(" {}/{}", bytes(file.0.min(file.1)), bytes(file.1))
+            } else {
+                String::new()
+            };
+            line.push_str(&format!("  {}", self.paint("2", &format!("{path}{part}"))));
         }
         self.live_line(&line);
     }
@@ -277,9 +284,24 @@ impl Reporter for Human {
                     self.line(&format!("pulling {download} file(s), {}", bytes(download_bytes)))
                 }
             }
-            Event::Progress { direction, path, files_done, files_total, bytes_done, bytes_total } => {
-                self.progress(direction, &path, (files_done, files_total), bytes_done, bytes_total)
-            }
+            Event::Progress {
+                direction,
+                path,
+                file_done,
+                file_size,
+                files_done,
+                files_total,
+                files_already,
+                bytes_done,
+                bytes_total,
+            } => self.progress(
+                direction,
+                &path,
+                (files_already + files_done, files_already + files_total),
+                (file_done, file_size),
+                bytes_done,
+                bytes_total,
+            ),
             Event::Uploaded { path, bytes: b } if self.list_files() => {
                 self.line(&format!("  {} {path} {}", self.paint("32", "↑"), self.paint("2", &bytes(b))))
             }

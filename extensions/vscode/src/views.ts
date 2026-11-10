@@ -304,10 +304,12 @@ class RunView implements vscode.WebviewViewProvider {
     $("t-pct").textContent = moving ? Math.floor(pct) + "%" : "";
     $("meter").classList.toggle("indeterminate", !moving);
     $("fill").style.width = moving ? pct + "%" : "";
-    $("t-files").textContent = moving ? t.filesDone + " / " + t.filesTotal + " files" + (t.already ? " · " + t.already + " already here" : "") : "";
+    $("t-files").textContent = moving ? t.filesDone + " / " + t.filesTotal + " files here" : "";
+    $("t-files").title = t.already ? t.already + " were already here; " + (t.filesTotal - t.already) + " to " + (t.direction === "up" ? "send" : "download") : "";
     $("t-bytes").textContent = moving ? fmt(Math.min(t.bytesDone, t.bytesTotal)) + " / " + fmt(t.bytesTotal) : "";
     $("t-rate").textContent = moving && !done && t.rate > 0 ? fmt(t.rate) + "/s" + (t.eta >= 0 ? " · " + dur(t.eta) + " left" : "") : "";
-    $("t-file").textContent = moving && !done ? t.path : "";
+    // Big files get their own progress, so the card never looks stuck.
+    $("t-file").textContent = moving && !done ? t.path + (t.fileSize >= 1048576 ? "  " + fmt(Math.min(t.fileDone, t.fileSize)) + " / " + fmt(t.fileSize) : "") : "";
     $("t-file").title = t.path;
   }
 
