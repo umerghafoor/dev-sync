@@ -17,6 +17,8 @@ export interface TransferView {
   rate: number;
   /** Seconds left, -1 if unknown. */
   eta: number;
+  /** Pulls: remote files already identical here (not downloaded again). */
+  already: number;
 }
 
 export interface ActivityEntry {
@@ -31,6 +33,7 @@ const KEEP = 100;
 export class Activity implements vscode.Disposable {
   transfer?: TransferView;
   recent: ActivityEntry[] = [];
+  private already = 0;
   private rateFrom?: { at: number; bytes: number; direction: string };
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChange = this.emitter.event;
@@ -50,6 +53,9 @@ export class Activity implements vscode.Disposable {
       case "connecting":
         if (this.transfer && this.transfer.direction === "none") this.set({ ...this.transfer, stage: `connecting to ${e.host}` });
         return true;
+      case "pull_planned":
+        this.already = e.already;
+        return true;
       case "progress": {
         const now = Date.now();
         if (!this.rateFrom || this.rateFrom.direction !== e.direction || this.rateFrom.bytes > e.bytes_done) {
@@ -67,6 +73,7 @@ export class Activity implements vscode.Disposable {
           bytesTotal: e.bytes_total,
           rate,
           eta: rate > 0 ? Math.max(0, (e.bytes_total - e.bytes_done) / rate) : -1,
+          already: e.direction === "down" ? this.already : 0,
         });
         return true;
       }
@@ -98,6 +105,7 @@ export class Activity implements vscode.Disposable {
   /** The operation finished (or failed): hide the progress shortly after. */
   end(): void {
     this.rateFrom = undefined;
+    this.already = 0;
     if (this.clearTimer) clearTimeout(this.clearTimer);
     if (!this.transfer) return;
     if (this.transfer.direction !== "none") {
@@ -115,7 +123,7 @@ export class Activity implements vscode.Disposable {
   }
 
   private blank(): TransferView {
-    return { direction: "none", stage: "", path: "", filesDone: 0, filesTotal: 0, bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1 };
+    return { direction: "none", stage: "", path: "", filesDone: 0, filesTotal: 0, bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1, already: 0 };
   }
 
   private set(t: TransferView | undefined): void {

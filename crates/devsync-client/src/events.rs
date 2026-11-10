@@ -55,6 +55,8 @@ pub enum Event {
         download_bytes: u64,
         /// Of those, files edited locally: saved as `*.devsync-remote`.
         conflicts: usize,
+        /// Remote files already identical locally (not downloaded again).
+        already: usize,
     },
     /// Transfer progress (throttled to a few updates per second).
     Progress {

@@ -8,7 +8,7 @@ use crate::project::Project;
 use crate::{ClientError, Result};
 use devsync_fs::{scan, scan_one, write, HashCache, Plan};
 use devsync_proto::{hash_hex, Entry, EntryKind, Hash, Request, Response, CHUNK_SIZE};
-use devsync_transport::{Session, TransportError};
+use devsync_transport::Session;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -253,6 +253,8 @@ pub struct PullStats {
     pub updated: Vec<String>,
     /// Edited locally and changed remotely: local kept, remote saved alongside.
     pub conflicts: Vec<(String, String)>,
+    /// Changed on the remote while downloading: not taken this time.
+    pub skipped: Vec<String>,
 }
 
 /// How a remote file relates to the local copy.
@@ -313,6 +315,9 @@ fn pull_remote(
         }
     }
     let mut stats = PullStats::default();
+    let already = remote.len() - take.len() - keep_both.len();
+    // Record what is already identical on both sides right away.
+    snap.save_seen();
     if take.is_empty() && keep_both.is_empty() {
         return Ok(stats);
     }
@@ -323,10 +328,11 @@ fn pull_remote(
     };
     rep.event(Event::Info {
         message: format!(
-            "{}: {} {} file(s){both}",
+            "{}: {} {} file(s){both}{}",
             opts.what,
             if opts.dry_run { "would update" } else { "updating" },
-            take.len()
+            take.len(),
+            if already > 0 { format!(" ({already} already here)") } else { String::new() }
         ),
     });
     let total_bytes: u64 = take.iter().chain(keep_both.iter()).map(|e| e.size).sum();
@@ -334,6 +340,7 @@ fn pull_remote(
         download: take.len() + keep_both.len(),
         download_bytes: total_bytes,
         conflicts: keep_both.len(),
+        already,
     });
     let mut prog = Transfer::new(rep, Direction::Down, take.len() + keep_both.len(), total_bytes);
     if !opts.dry_run {
@@ -343,8 +350,13 @@ fn pull_remote(
     for e in &take {
         if !opts.dry_run {
             prog.file(&e.path, e.size, 0);
-            download(s, &p.root, e, &p.root.join(&e.path), &mut |n| prog.bytes(n))?;
+            let ok = download(s, &p.root, e, &p.root.join(&e.path), &mut |n| prog.bytes(n))?;
             prog.file_done();
+            if !ok {
+                changed_while_reading(rep, &e.path);
+                stats.skipped.push(e.path.clone());
+                continue;
+            }
             snap.set(&e.path, e.hash);
             // Remember what already arrived, in case the link drops.
             if checkpoint.elapsed() > std::time::Duration::from_secs(5) {
@@ -359,8 +371,13 @@ fn pull_remote(
         let alt = format!("{}.devsync-remote", e.path);
         if !opts.dry_run {
             prog.file(&e.path, e.size, 0);
-            download(s, &p.root, e, &p.root.join(&alt), &mut |n| prog.bytes(n))?;
+            let ok = download(s, &p.root, e, &p.root.join(&alt), &mut |n| prog.bytes(n))?;
             prog.file_done();
+            if !ok {
+                changed_while_reading(rep, &e.path);
+                stats.skipped.push(e.path.clone());
+                continue;
+            }
         }
         rep.event(Event::Conflict { path: e.path.clone(), saved_as: alt.clone() });
         stats.conflicts.push((e.path.clone(), alt));
@@ -419,6 +436,7 @@ fn under(path: &str, prefixes: &[String]) -> bool {
 /// `devsync pull` without a path: bring the whole project's remote changes
 /// down safely (sync excludes apply; local edits are never overwritten).
 pub fn pull_project(p: &Project, rep: &dyn Reporter, dry_run: bool) -> Result<PullStats> {
+    let _lock = p.sync_lock(rep)?;
     p.with_retry(rep, || {
         stage(rep, Stage::ScanLocal, "checking local files");
         let local = local_manifest(p)?;
@@ -446,6 +464,7 @@ pub fn pull_project(p: &Project, rep: &dyn Reporter, dry_run: bool) -> Result<Pu
 /// `force` overwrites local edits instead of saving `*.devsync-remote`.
 pub fn pull_paths(p: &Project, rep: &dyn Reporter, paths: &[String], force: bool, dry_run: bool) -> Result<PullStats> {
     let wanted = normalize_paths(paths)?;
+    let _lock = p.sync_lock(rep)?;
     p.with_retry(rep, || {
         rep.event(Event::Connecting { host: p.host_label() });
         let mut s = p.connect()?;
@@ -575,14 +594,18 @@ fn push_once(p: &Project, rep: &dyn Reporter, opts: PushOptions) -> Result<PushS
     // or new folder never overwrites (or, with delete on, wipes) the project.
     let mut snap = Snapshot::load(p);
     snap.observe_remote(&remote);
+    let mut skipped = Vec::new();
     if p.config.sync.initial_pull && !remote.is_empty() && !snap.existed() {
         let first = PullOpts { dry_run: opts.dry_run, force: false, what: "first sync with this remote" };
         let pulled = pull_remote(&mut s, p, rep, &local, &remote, &mut snap, &first)?;
         if !opts.dry_run && !(pulled.updated.is_empty() && pulled.conflicts.is_empty()) {
             local = local_manifest(p)?;
         }
+        skipped = pulled.skipped;
     }
-    let plan = devsync_fs::plan(&local, &remote, p.config.sync.delete);
+    let mut plan = devsync_fs::plan(&local, &remote, p.config.sync.delete);
+    // Never push an old local copy over a remote file we could not fetch.
+    plan.upload.retain(|e| !skipped.contains(&e.path));
     rep.event(Event::Planned {
         upload: plan.upload.len(),
         upload_bytes: plan.upload_bytes(),
@@ -675,51 +698,81 @@ pub fn push_with(
     opts: PushOptions,
     policy: devsync_transport::RetryPolicy,
 ) -> Result<PushStats> {
+    let _lock = p.sync_lock(rep)?;
     p.with_retry_policy(policy, rep, || push_once(p, rep, opts))
 }
 
-/// Downloads remote `e` to `dest` (verified, atomic).
+/// Downloads remote `e` to `dest` (verified, atomic). An interrupted
+/// download resumes where it stopped on the next attempt. Returns
+/// `Ok(false)` if the remote file changed while it was being read (nothing
+/// is written; the next sync gets the new version).
 /// `on_bytes` is called with each chunk's size, for progress.
-fn download(s: &mut Session, dest_root: &Path, e: &Entry, dest: &Path, on_bytes: &mut dyn FnMut(u64)) -> Result<()> {
+fn download(s: &mut Session, dest_root: &Path, e: &Entry, dest: &Path, on_bytes: &mut dyn FnMut(u64)) -> Result<bool> {
     if e.kind == EntryKind::Symlink {
         write::write_symlink(dest_root, dest, e.link.as_deref().unwrap_or_default())?;
-        return Ok(());
+        return Ok(true);
     }
     write::prepare_parent(dest_root, dest)?;
     let tmp = dest.with_file_name(format!(
         ".{}.devsync-dl",
         dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
     ));
-    let res = (|| -> Result<()> {
-        let mut f = fs::File::create(&tmp)?;
-        let mut offset = 0u64;
-        loop {
-            match s.call(&Request::GetChunk { path: e.path.clone(), offset })? {
-                Response::Chunk { data, eof, .. } => {
-                    let raw = lz4_flex::decompress_size_prepended(&data)
-                        .map_err(|err| ClientError::Other(format!("corrupt chunk: {err}")))?;
-                    f.write_all(&raw)?;
-                    offset += raw.len() as u64;
-                    on_bytes(raw.len() as u64);
-                    if eof || raw.is_empty() {
-                        break;
-                    }
-                }
-                other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
-            }
-        }
-        f.sync_all()?;
-        drop(f);
-        if devsync_fs::hash_file(&tmp)? != e.hash {
-            return Err(TransportError::Remote(format!("{} changed during download (will retry)", e.path)).into());
-        }
-        write::commit_file(dest_root, &tmp, dest, e.mode, e.mtime_ns)?;
-        Ok(())
-    })();
-    if res.is_err() {
+    // A partial file from an interrupted attempt: continue after it.
+    let mut resumed = fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0);
+    if resumed > e.size {
         let _ = fs::remove_file(&tmp);
+        resumed = 0;
     }
-    res
+    loop {
+        // On failure the partial file is kept to resume from; the hash
+        // check below rejects it if it turns out to be stale.
+        fetch_into(s, e, &tmp, resumed, on_bytes)?;
+        if devsync_fs::hash_file(&tmp)? == e.hash {
+            write::commit_file(dest_root, &tmp, dest, e.mode, e.mtime_ns)?;
+            return Ok(true);
+        }
+        let _ = fs::remove_file(&tmp);
+        if resumed > 0 {
+            // The kept part may be from an older version: start over once.
+            resumed = 0;
+            continue;
+        }
+        return Ok(false);
+    }
+}
+
+fn fetch_into(s: &mut Session, e: &Entry, tmp: &Path, from: u64, on_bytes: &mut dyn FnMut(u64)) -> Result<()> {
+    let mut f = fs::OpenOptions::new().create(true).append(from > 0).write(true).truncate(from == 0).open(tmp)?;
+    if from > 0 {
+        on_bytes(from);
+    }
+    let mut offset = from;
+    loop {
+        if offset >= e.size && e.size > 0 {
+            break;
+        }
+        match s.call(&Request::GetChunk { path: e.path.clone(), offset })? {
+            Response::Chunk { data, eof, .. } => {
+                let raw = lz4_flex::decompress_size_prepended(&data)
+                    .map_err(|err| ClientError::Other(format!("corrupt chunk: {err}")))?;
+                f.write_all(&raw)?;
+                offset += raw.len() as u64;
+                on_bytes(raw.len() as u64);
+                if eof || raw.is_empty() {
+                    break;
+                }
+            }
+            other => return Err(ClientError::Other(format!("unexpected agent reply: {other:?}"))),
+        }
+    }
+    f.sync_all()?;
+    Ok(())
+}
+
+fn changed_while_reading(rep: &dyn Reporter, path: &str) {
+    rep.event(Event::Warning {
+        message: format!("{path} changed on the remote while it was downloading; skipped, the next sync gets it"),
+    });
 }
 
 #[derive(Debug, Default, Clone)]
@@ -750,14 +803,22 @@ fn pull_back_once(p: &Project, rep: &dyn Reporter, job_id: &str) -> Result<PullB
         let safe = local_hash.as_ref() == snap.get(&e.path);
         prog.file(&e.path, e.size, 0);
         if safe {
-            download(&mut s, &p.root, &e, &p.root.join(&e.path), &mut |n| prog.bytes(n))?;
+            if !download(&mut s, &p.root, &e, &p.root.join(&e.path), &mut |n| prog.bytes(n))? {
+                prog.file_done();
+                changed_while_reading(rep, &e.path);
+                continue;
+            }
             prog.file_done();
             snap.set(&e.path, e.hash);
             rep.event(Event::Pulled { path: e.path.clone(), bytes: e.size });
             stats.pulled.push(e.path);
         } else {
             let alt = format!("{}.devsync-remote", e.path);
-            download(&mut s, &p.root, &e, &p.root.join(&alt), &mut |n| prog.bytes(n))?;
+            if !download(&mut s, &p.root, &e, &p.root.join(&alt), &mut |n| prog.bytes(n))? {
+                prog.file_done();
+                changed_while_reading(rep, &e.path);
+                continue;
+            }
             prog.file_done();
             rep.event(Event::Conflict { path: e.path.clone(), saved_as: alt.clone() });
             stats.conflicts.push((e.path, alt));
@@ -777,6 +838,7 @@ fn prog_used(s: &PullBackStats) -> bool {
 
 /// Brings back files that remote job `job_id` created or modified.
 pub fn pull_back(p: &Project, rep: &dyn Reporter, job_id: &str) -> Result<PullBackStats> {
+    let _lock = p.sync_lock(rep)?;
     p.with_retry(rep, || pull_back_once(p, rep, job_id))
 }
 
@@ -804,8 +866,12 @@ pub fn pull(p: &Project, rep: &dyn Reporter, rel: &str, dest_root: Option<&Path>
         let mut prog = Transfer::new(rep, Direction::Down, wanted.len(), wanted.iter().map(|e| e.size).sum());
         for e in &wanted {
             prog.file(&e.path, e.size, 0);
-            download(&mut s, &dest_root, e, &dest_root.join(&e.path), &mut |n| prog.bytes(n))?;
+            let ok = download(&mut s, &dest_root, e, &dest_root.join(&e.path), &mut |n| prog.bytes(n))?;
             prog.file_done();
+            if !ok {
+                changed_while_reading(rep, &e.path);
+                continue;
+            }
             rep.event(Event::Pulled { path: e.path.clone(), bytes: e.size });
             done.push(e.path.clone());
         }

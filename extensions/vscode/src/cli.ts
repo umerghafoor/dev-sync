@@ -196,7 +196,7 @@ export type DevsyncEvent =
   | { event: "up_to_date" }
   | { event: "pulled"; path: string; bytes: number }
   | { event: "stage"; stage: "scan_local" | "scan_remote" | "upload" | "download"; message: string }
-  | { event: "pull_planned"; download: number; download_bytes: number; conflicts: number }
+  | { event: "pull_planned"; download: number; download_bytes: number; conflicts: number; already: number }
   | {
       event: "progress";
       direction: "up" | "down";

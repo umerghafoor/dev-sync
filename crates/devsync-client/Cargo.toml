@@ -24,6 +24,7 @@ thiserror.workspace = true
 tracing.workspace = true
 lz4_flex.workspace = true
 postcard.workspace = true
+libc.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

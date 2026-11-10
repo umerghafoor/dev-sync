@@ -234,7 +234,11 @@ class Controller implements vscode.Disposable {
         if (this.state !== "syncing") this.setState("syncing", e.message);
         break;
       case "pull_planned":
-        if (e.download > 0) this.setState("syncing", `${e.download} file(s) to download`);
+        if (e.download > 0)
+          this.setState(
+            "syncing",
+            `${e.download} file(s) to download${e.already ? `, ${e.already} already here` : ""}`,
+          );
         break;
       case "watching":
         this.setState("idle");
@@ -456,6 +460,9 @@ class Controller implements vscode.Disposable {
         const onEvent = (e: DevsyncEvent) => {
           this.activity.handle(e);
           if (e.event === "stage") progress.report({ message: `${e.message}…` });
+          if (e.event === "info" && e.message.startsWith("another devsync")) {
+            progress.report({ message: "waiting for auto sync to finish…" });
+          }
           if (e.event === "retrying") progress.report({ message: `network problem — retry #${e.attempt}` });
           if (e.event === "progress") {
             const pct = e.bytes_total > 0 ? (100 * Math.min(e.bytes_done, e.bytes_total)) / e.bytes_total : 100;

@@ -102,7 +102,40 @@ impl Project {
         )
     }
 
+    /// Only one devsync process transfers files for a project at a time
+    /// (e.g. auto sync and a manual pull): concurrent ones would download
+    /// the same files twice and trip over each other's partial files. Waits
+    /// (interruptibly) for the other one to finish.
+    pub fn sync_lock(&self, rep: &dyn Reporter) -> Result<SyncLock> {
+        use std::os::unix::io::AsRawFd;
+        let dir = self.state_dir();
+        std::fs::create_dir_all(&dir)?;
+        let f = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(dir.join("sync.lock"))?;
+        let mut told = false;
+        loop {
+            // SAFETY: flock on a descriptor we own; released when it closes.
+            if unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+                return Ok(SyncLock { _file: f });
+            }
+            if !told {
+                rep.event(Event::Info {
+                    message: "another devsync is syncing this project; waiting for it to finish".into(),
+                });
+                told = true;
+            }
+            if crate::interrupted() {
+                return Err(ClientError::Interrupted);
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+    }
+
     pub fn host_label(&self) -> String {
         self.config.remote.host.clone()
     }
+}
+
+/// Held while transferring files; see [`Project::sync_lock`].
+pub struct SyncLock {
+    _file: std::fs::File,
 }

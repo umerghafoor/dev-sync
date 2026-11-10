@@ -72,6 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pulls appeared to start over every time on a flaky link. Now only one
+  devsync process syncs a project at a time (auto sync and a manual pull no
+  longer download the same files into the same temp file and break each
+  other); interrupted downloads resume where they stopped; a file that
+  changes on the remote mid-download is skipped (and never overwritten by an
+  older local copy) instead of failing the whole pull; and pulls report how
+  many files are already here.
 - "Not on remote yet" (`devsync changes`) listed every file until a first sync
   had completed. It now compares with what the remote actually holds (recorded
   at every remote scan and kept even if a sync is interrupted), so only files

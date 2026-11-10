@@ -304,7 +304,7 @@ class RunView implements vscode.WebviewViewProvider {
     $("t-pct").textContent = moving ? Math.floor(pct) + "%" : "";
     $("meter").classList.toggle("indeterminate", !moving);
     $("fill").style.width = moving ? pct + "%" : "";
-    $("t-files").textContent = moving ? t.filesDone + " / " + t.filesTotal + " files" : "";
+    $("t-files").textContent = moving ? t.filesDone + " / " + t.filesTotal + " files" + (t.already ? " · " + t.already + " already here" : "") : "";
     $("t-bytes").textContent = moving ? fmt(Math.min(t.bytesDone, t.bytesTotal)) + " / " + fmt(t.bytesTotal) : "";
     $("t-rate").textContent = moving && !done && t.rate > 0 ? fmt(t.rate) + "/s" + (t.eta >= 0 ? " · " + dur(t.eta) + " left" : "") : "";
     $("t-file").textContent = moving && !done ? t.path : "";

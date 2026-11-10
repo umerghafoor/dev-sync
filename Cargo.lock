@@ -305,6 +305,7 @@ dependencies = [
  "devsync-fs",
  "devsync-proto",
  "devsync-transport",
+ "libc",
  "lz4_flex",
  "postcard",
  "serde",

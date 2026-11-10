@@ -344,6 +344,38 @@ fn changes_lists_only_files_that_differ_from_the_remote_before_first_sync() {
 }
 
 #[test]
+fn pulls_resume_skip_what_is_here_and_never_run_twice_at_once() {
+    let env = setup();
+    let big: String = (0..300_000).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
+    write(&env.remote.join("big.txt"), &big);
+    for i in 0..20 {
+        write(&env.remote.join(format!("src/f{i}.py")), &format!("x = {i}"));
+    }
+    // An interrupted earlier download left the first half behind: resume it.
+    write(&env.local.join(".big.txt.devsync-dl"), &big[..150_000]);
+    // A stale partial file (older version) is detected and refetched.
+    write(&env.local.join("src/.f1.py.devsync-dl"), "old content that is longer");
+    // Some files are already here.
+    write(&env.local.join("src/f0.py"), "x = 0");
+
+    // Two syncs at once (auto sync + manual pull): one waits for the other.
+    let a = {
+        let local = env.local.clone();
+        std::thread::spawn(move || devsync(&local, &["pull"]))
+    };
+    let b = devsync(&env.local, &["pull"]);
+    let a = a.join().unwrap();
+    ok(&a);
+    ok(&b);
+    assert_eq!(fs::read_to_string(env.local.join("big.txt")).unwrap(), big);
+    assert_eq!(fs::read_to_string(env.local.join("src/f1.py")).unwrap(), "x = 1");
+    assert!(!env.local.join(".big.txt.devsync-dl").exists());
+    let both = format!("{}{}", String::from_utf8_lossy(&a.stderr), String::from_utf8_lossy(&b.stderr));
+    assert!(both.contains("already here"), "{both}");
+    assert!(both.contains("already up to date"), "the second pull finds everything here: {both}");
+}
+
+#[test]
 fn first_sync_pulls_existing_remote_code_into_new_folder() {
     let env = setup();
     // The remote already holds the project.
