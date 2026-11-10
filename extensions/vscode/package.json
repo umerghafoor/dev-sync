@@ -251,7 +251,7 @@
       },
       {
         "command": "devsync.git.commitAll",
-        "title": "Git Commit All",
+        "title": "Commit All",
         "category": "Git (remote)"
       },
       {
@@ -298,43 +298,43 @@
       },
       {
         "command": "devsync.git.push",
-        "title": "Git Push",
+        "title": "Push",
         "category": "Git (remote)",
         "icon": "$(repo-push)"
       },
       {
         "command": "devsync.git.pull",
-        "title": "Git Pull",
+        "title": "Pull",
         "category": "Git (remote)",
         "icon": "$(repo-pull)"
       },
       {
         "command": "devsync.git.fetch",
-        "title": "Git Fetch",
+        "title": "Fetch",
         "category": "Git (remote)",
         "icon": "$(repo-fetch)"
       },
       {
         "command": "devsync.git.sync",
-        "title": "Git Sync (Pull, then Push)",
+        "title": "Sync",
         "category": "Git (remote)",
         "icon": "$(sync)"
       },
       {
         "command": "devsync.git.publish",
-        "title": "Git Publish Branch",
+        "title": "Publish Branch",
         "category": "Git (remote)",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "devsync.git.checkout",
-        "title": "Git Checkout to…",
+        "title": "Checkout to…",
         "category": "Git (remote)",
         "icon": "$(git-branch)"
       },
       {
         "command": "devsync.git.log",
-        "title": "Git History",
+        "title": "Show History",
         "category": "Git (remote)",
         "icon": "$(history)"
       },
@@ -343,6 +343,250 @@
         "title": "Refresh Graph",
         "category": "Git (remote)",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "devsync.git.commitAmend",
+        "title": "Commit Staged (Amend)",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.commitAllAmend",
+        "title": "Commit All (Amend)",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.commitNoVerify",
+        "title": "Commit (No Verify)",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.commitSignoff",
+        "title": "Commit (Signed Off)",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.commitEmpty",
+        "title": "Commit Empty",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.undoCommit",
+        "title": "Undo Last Commit",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.discardAll",
+        "title": "Discard All Changes",
+        "category": "Git (remote)",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "devsync.git.cleanAll",
+        "title": "Discard All Untracked Files",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stageAllTracked",
+        "title": "Stage All Tracked Changes",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stageAllUntracked",
+        "title": "Stage All Untracked Changes",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.openHEADFile",
+        "title": "Open File (HEAD)",
+        "category": "Git (remote)",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "devsync.git.ignore",
+        "title": "Add to .gitignore",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.branch",
+        "title": "Create Branch…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.branchFrom",
+        "title": "Create Branch From…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.renameBranch",
+        "title": "Rename Branch…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.deleteBranch",
+        "title": "Delete Branch…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.merge",
+        "title": "Merge…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.rebase",
+        "title": "Rebase Branch…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.mergeAbort",
+        "title": "Abort Merge",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.rebaseAbort",
+        "title": "Abort Rebase",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.checkoutDetached",
+        "title": "Checkout to (Detached)…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.pullRebase",
+        "title": "Pull (Rebase)",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.pullFrom",
+        "title": "Pull from…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.pushTo",
+        "title": "Push to…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.pushForce",
+        "title": "Push (Force)",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.pushTags",
+        "title": "Push Tags",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.fetchAll",
+        "title": "Fetch From All Remotes",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.addRemote",
+        "title": "Add Remote…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.removeRemote",
+        "title": "Remove Remote…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stash",
+        "title": "Stash",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashUntracked",
+        "title": "Stash (Include Untracked)",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashStaged",
+        "title": "Stash Staged",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashApplyLatest",
+        "title": "Apply Latest Stash",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashApply",
+        "title": "Apply Stash…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashPopLatest",
+        "title": "Pop Latest Stash",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashPop",
+        "title": "Pop Stash…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashDrop",
+        "title": "Drop Stash…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashDropAll",
+        "title": "Drop All Stashes…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.stashView",
+        "title": "View Stash…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.createTag",
+        "title": "Create Tag…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.deleteTag",
+        "title": "Delete Tag…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.fileHistory",
+        "title": "Open File History",
+        "category": "Git (remote)",
+        "icon": "$(history)"
+      },
+      {
+        "command": "devsync.git.showOutput",
+        "title": "Show Git Output",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.init",
+        "title": "Initialize Repository on Remote",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.commitActions",
+        "title": "Commit Actions…",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.showCommit",
+        "title": "Open Commit Changes",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.toggleBlame",
+        "title": "Toggle Line Blame",
+        "category": "Git (remote)"
+      },
+      {
+        "command": "devsync.git.graphGoToCurrent",
+        "title": "Go to Current History Item",
+        "category": "Git (remote)",
+        "icon": "$(target)"
       }
     ],
     "menus": {
@@ -458,39 +702,44 @@
           "group": "navigation@0"
         },
         {
-          "command": "devsync.git.pull",
+          "submenu": "devsync.git.sm.commit",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "5_git@1"
+          "group": "0_git@0"
         },
         {
-          "command": "devsync.git.push",
+          "submenu": "devsync.git.sm.changes",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "5_git@2"
+          "group": "0_git@1"
         },
         {
-          "command": "devsync.git.fetch",
+          "submenu": "devsync.git.sm.pullpush",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "5_git@3"
+          "group": "0_git@2"
         },
         {
-          "command": "devsync.git.sync",
+          "submenu": "devsync.git.sm.branch",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "5_git@4"
+          "group": "0_git@3"
         },
         {
-          "command": "devsync.git.commitAll",
+          "submenu": "devsync.git.sm.remote",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "5_git@0"
+          "group": "0_git@4"
         },
         {
-          "command": "devsync.git.checkout",
+          "submenu": "devsync.git.sm.stash",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "5_git@5"
+          "group": "0_git@5"
         },
         {
-          "command": "devsync.git.log",
+          "submenu": "devsync.git.sm.tags",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "5_git@6"
+          "group": "0_git@6"
+        },
+        {
+          "command": "devsync.git.showOutput",
+          "when": "scmProvider == devsync && devsync.remoteGit",
+          "group": "9_git@1"
         }
       ],
       "scm/resourceGroup/context": [
@@ -518,6 +767,26 @@
           "command": "devsync.git.unstageAll",
           "when": "scmProvider == devsync && devsync.remoteGit && scmResourceGroup == index",
           "group": "inline"
+        },
+        {
+          "command": "devsync.git.discardAll",
+          "when": "scmProvider == devsync && devsync.remoteGit && scmResourceGroup == workingTree",
+          "group": "inline@0"
+        },
+        {
+          "command": "devsync.git.discardAll",
+          "when": "scmProvider == devsync && devsync.remoteGit && scmResourceGroup == workingTree",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "devsync.git.stageAllTracked",
+          "when": "scmProvider == devsync && devsync.remoteGit && scmResourceGroup == workingTree",
+          "group": "1_modification@2"
+        },
+        {
+          "command": "devsync.git.stageAllUntracked",
+          "when": "scmProvider == devsync && devsync.remoteGit && scmResourceGroup == workingTree",
+          "group": "1_modification@3"
         }
       ],
       "scm/resourceState/context": [
@@ -630,6 +899,16 @@
           "command": "devsync.git.discard",
           "when": "scmProvider == devsync && devsync.remoteGit && scmResourceState =~ /^git-(workingTree|untracked)$/",
           "group": "1_modification@4"
+        },
+        {
+          "command": "devsync.git.openHEADFile",
+          "when": "scmProvider == devsync && devsync.remoteGit && scmResourceState =~ /^git-(workingTree|index|merge)$/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "devsync.git.ignore",
+          "when": "scmProvider == devsync && devsync.remoteGit && scmResourceState == git-untracked",
+          "group": "2_ignore@1"
         }
       ],
       "editor/title/run": [
@@ -772,9 +1051,206 @@
         {
           "command": "devsync.git.graphRefresh",
           "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.commitActions",
+          "when": "false"
+        },
+        {
+          "command": "devsync.git.showCommit",
+          "when": "false"
+        },
+        {
+          "command": "devsync.git.commitAmend",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.commitAllAmend",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.commitNoVerify",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.commitSignoff",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.commitEmpty",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.undoCommit",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.discardAll",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.cleanAll",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stageAllTracked",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stageAllUntracked",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.openHEADFile",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.ignore",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.branch",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.branchFrom",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.renameBranch",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.deleteBranch",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.merge",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.rebase",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.mergeAbort",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.rebaseAbort",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.checkoutDetached",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.pullRebase",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.pullFrom",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.pushTo",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.pushForce",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.pushTags",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.fetchAll",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.addRemote",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.removeRemote",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stash",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashUntracked",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashStaged",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashApplyLatest",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashApply",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashPopLatest",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashPop",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashDrop",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashDropAll",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.stashView",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.createTag",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.deleteTag",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.fileHistory",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.showOutput",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.toggleBlame",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.graphGoToCurrent",
+          "when": "devsync.remoteGit"
+        },
+        {
+          "command": "devsync.git.init",
+          "when": "devsync.active && !devsync.remoteGit"
         }
       ],
       "view/title": [
+        {
+          "command": "devsync.git.graphGoToCurrent",
+          "when": "view == devsync.gitGraph",
+          "group": "navigation@0"
+        },
         {
           "command": "devsync.pull",
           "when": "view == devsync.run",
@@ -958,6 +1434,16 @@
           "command": "devsync.pullPaths",
           "when": "devsync.active",
           "group": "7_devsync@1"
+        },
+        {
+          "command": "devsync.git.fileHistory",
+          "when": "devsync.remoteGit && !explorerResourceIsFolder",
+          "group": "7_devsyncgit@1"
+        },
+        {
+          "command": "devsync.git.openHEADFile",
+          "when": "devsync.remoteGit && !explorerResourceIsFolder",
+          "group": "7_devsyncgit@2"
         }
       ],
       "editor/title/context": [
@@ -965,8 +1451,229 @@
           "command": "devsync.pullPaths",
           "when": "devsync.active && resourceScheme == file",
           "group": "7_devsync@1"
+        },
+        {
+          "command": "devsync.git.fileHistory",
+          "when": "devsync.remoteGit && resourceScheme == file",
+          "group": "7_devsyncgit@1"
+        },
+        {
+          "command": "devsync.git.openHEADFile",
+          "when": "devsync.remoteGit && resourceScheme == file",
+          "group": "7_devsyncgit@2"
         }
-      ]
+      ],
+      "devsync.git.sm.commit": [
+        {
+          "command": "devsync.git.commit",
+          "group": "0_x@0"
+        },
+        {
+          "command": "devsync.git.commitAll",
+          "group": "0_x@1"
+        },
+        {
+          "command": "devsync.git.undoCommit",
+          "group": "0_x@2"
+        },
+        {
+          "command": "devsync.git.commitAmend",
+          "group": "1_x@0"
+        },
+        {
+          "command": "devsync.git.commitAllAmend",
+          "group": "1_x@1"
+        },
+        {
+          "command": "devsync.git.commitSignoff",
+          "group": "2_x@0"
+        },
+        {
+          "command": "devsync.git.commitNoVerify",
+          "group": "2_x@1"
+        },
+        {
+          "command": "devsync.git.commitEmpty",
+          "group": "2_x@2"
+        }
+      ],
+      "devsync.git.sm.changes": [
+        {
+          "command": "devsync.git.stageAll",
+          "group": "0_x@0"
+        },
+        {
+          "command": "devsync.git.stageAllTracked",
+          "group": "0_x@1"
+        },
+        {
+          "command": "devsync.git.stageAllUntracked",
+          "group": "0_x@2"
+        },
+        {
+          "command": "devsync.git.unstageAll",
+          "group": "0_x@3"
+        },
+        {
+          "command": "devsync.git.discardAll",
+          "group": "1_x@0"
+        },
+        {
+          "command": "devsync.git.cleanAll",
+          "group": "1_x@1"
+        }
+      ],
+      "devsync.git.sm.pullpush": [
+        {
+          "command": "devsync.git.sync",
+          "group": "0_x@0"
+        },
+        {
+          "command": "devsync.git.pull",
+          "group": "1_x@0"
+        },
+        {
+          "command": "devsync.git.pullRebase",
+          "group": "1_x@1"
+        },
+        {
+          "command": "devsync.git.pullFrom",
+          "group": "1_x@2"
+        },
+        {
+          "command": "devsync.git.push",
+          "group": "2_x@0"
+        },
+        {
+          "command": "devsync.git.pushTo",
+          "group": "2_x@1"
+        },
+        {
+          "command": "devsync.git.pushForce",
+          "group": "2_x@2"
+        },
+        {
+          "command": "devsync.git.fetch",
+          "group": "3_x@0"
+        },
+        {
+          "command": "devsync.git.fetchAll",
+          "group": "3_x@1"
+        }
+      ],
+      "devsync.git.sm.branch": [
+        {
+          "command": "devsync.git.checkout",
+          "group": "0_x@0"
+        },
+        {
+          "command": "devsync.git.checkoutDetached",
+          "group": "0_x@1"
+        },
+        {
+          "command": "devsync.git.branch",
+          "group": "1_x@0"
+        },
+        {
+          "command": "devsync.git.branchFrom",
+          "group": "1_x@1"
+        },
+        {
+          "command": "devsync.git.renameBranch",
+          "group": "1_x@2"
+        },
+        {
+          "command": "devsync.git.deleteBranch",
+          "group": "1_x@3"
+        },
+        {
+          "command": "devsync.git.publish",
+          "group": "1_x@4"
+        },
+        {
+          "command": "devsync.git.merge",
+          "group": "2_x@0"
+        },
+        {
+          "command": "devsync.git.rebase",
+          "group": "2_x@1"
+        },
+        {
+          "command": "devsync.git.mergeAbort",
+          "group": "2_x@2"
+        },
+        {
+          "command": "devsync.git.rebaseAbort",
+          "group": "2_x@3"
+        }
+      ],
+      "devsync.git.sm.remote": [
+        {
+          "command": "devsync.git.addRemote",
+          "group": "0_x@0"
+        },
+        {
+          "command": "devsync.git.removeRemote",
+          "group": "0_x@1"
+        }
+      ],
+      "devsync.git.sm.stash": [
+        {
+          "command": "devsync.git.stash",
+          "group": "0_x@0"
+        },
+        {
+          "command": "devsync.git.stashUntracked",
+          "group": "0_x@1"
+        },
+        {
+          "command": "devsync.git.stashStaged",
+          "group": "0_x@2"
+        },
+        {
+          "command": "devsync.git.stashApplyLatest",
+          "group": "1_x@0"
+        },
+        {
+          "command": "devsync.git.stashApply",
+          "group": "1_x@1"
+        },
+        {
+          "command": "devsync.git.stashPopLatest",
+          "group": "1_x@2"
+        },
+        {
+          "command": "devsync.git.stashPop",
+          "group": "1_x@3"
+        },
+        {
+          "command": "devsync.git.stashDrop",
+          "group": "2_x@0"
+        },
+        {
+          "command": "devsync.git.stashDropAll",
+          "group": "2_x@1"
+        },
+        {
+          "command": "devsync.git.stashView",
+          "group": "2_x@2"
+        }
+      ],
+      "devsync.git.sm.tags": [
+        {
+          "command": "devsync.git.createTag",
+          "group": "0_x@0"
+        },
+        {
+          "command": "devsync.git.deleteTag",
+          "group": "0_x@1"
+        },
+        {
+          "command": "devsync.git.pushTags",
+          "group": "0_x@2"
+        }
+      ],
+      "editor/title": []
     },
     "keybindings": [
       {
@@ -1118,6 +1825,22 @@
           "type": "boolean",
           "default": false,
           "description": "Commit all changes on the remote when nothing is staged, without asking."
+        },
+        "devsync.git.blame": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show who last changed the current line (remote git blame) in the status bar."
+        },
+        "devsync.git.autofetch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Periodically run git fetch on the remote repository."
+        },
+        "devsync.git.autofetchPeriod": {
+          "type": "number",
+          "default": 180,
+          "minimum": 60,
+          "description": "Seconds between automatic fetches."
         }
       }
     },
@@ -1168,7 +1891,37 @@
           "icon": "$(git-commit)"
         }
       ]
-    }
+    },
+    "submenus": [
+      {
+        "id": "devsync.git.sm.commit",
+        "label": "Commit"
+      },
+      {
+        "id": "devsync.git.sm.changes",
+        "label": "Changes"
+      },
+      {
+        "id": "devsync.git.sm.pullpush",
+        "label": "Pull, Push"
+      },
+      {
+        "id": "devsync.git.sm.branch",
+        "label": "Branch"
+      },
+      {
+        "id": "devsync.git.sm.remote",
+        "label": "Remote"
+      },
+      {
+        "id": "devsync.git.sm.stash",
+        "label": "Stash"
+      },
+      {
+        "id": "devsync.git.sm.tags",
+        "label": "Tags"
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",

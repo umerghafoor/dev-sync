@@ -16,7 +16,8 @@ export function remoteUri(root: string, rel: string): vscode.Uri {
 }
 
 /** `id`: the object id when known, so the content comes from the local cache. */
-export function gitUri(root: string, rel: string, ref: "HEAD" | "", id?: string): vscode.Uri {
+/** `ref`: "HEAD", "" (the index) or any revision such as a commit id. */
+export function gitUri(root: string, rel: string, ref: string, id?: string): vscode.Uri {
   return vscode.Uri.from({ scheme: GIT_SCHEME, path: `/${rel}`, query: root, fragment: id ? `${ref}@${id}` : ref });
 }
 
@@ -72,7 +73,7 @@ export class RemoteDocs implements vscode.TextDocumentContentProvider, vscode.Di
     if (r.code === 0) return r.stdout;
     // Not on the remote / not in git at that revision: show it as empty.
     const err = r.stderr.trim();
-    if (r.code === 1 || /does not exist|exists on disk, but not in|not on the remote/.test(err)) return "";
+    if (r.code === 1 || /does not exist|exists on disk, but not in|not on the remote|invalid object|unknown revision|bad revision/.test(err)) return "";
     this.log.appendLine(`${path.basename(rel)}: ${err}`);
     throw new Error(`devsync: can't read the remote version of ${rel}: ${err.split("\n").pop()}`);
   }

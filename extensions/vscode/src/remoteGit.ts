@@ -126,7 +126,9 @@ export class RemoteGit implements vscode.Disposable {
   private ahead = 0;
   private behind = 0;
   private upstream = "";
-  private entries: Entry[] = [];
+  entries: Entry[] = [];
+  /** Index object id of every tracked file (project-relative path), for gutter diffs. */
+  indexIds = new Map<string, string>();
   /** Commit HEAD points at; the graph reloads when this (or the upstream position) changes. */
   head = "";
   private readonly headEmitter = new vscode.EventEmitter<void>();
@@ -138,8 +140,8 @@ export class RemoteGit implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
-    private readonly root: string,
-    private readonly log: vscode.OutputChannel,
+    readonly root: string,
+    readonly log: vscode.OutputChannel,
     private readonly onFilesChanged: () => void,
     /** The project's devsync Source Control entry: git shares it instead of adding a second one. */
     private readonly host?: DevsyncScm,
@@ -151,12 +153,12 @@ export class RemoteGit implements vscode.Disposable {
   // ------------------------------------------------------------ git calls
 
   /** Runs git on the remote. `push`: send local edits first. */
-  private async git(args: string[], opts: { push?: boolean; onEvent?: (e: DevsyncEvent) => void } = {}): Promise<GitResult> {
+  async git(args: string[], opts: { push?: boolean; onEvent?: (e: DevsyncEvent) => void } = {}): Promise<GitResult> {
     const flags = opts.push ? [] : ["--no-push"];
     return runJson<GitResult>(this.root, ["git", ...flags, "--", ...args], 15 * 60_000, opts.onEvent);
   }
 
-  private async gitOk(title: string, args: string[], push = true): Promise<GitResult> {
+  async gitOk(title: string, args: string[], push = true): Promise<GitResult> {
     this.busy++;
     this.updateStatusBar();
     try {
@@ -219,6 +221,7 @@ export class RemoteGit implements vscode.Disposable {
         .filter((e) => e.rel.startsWith(prefix))
         .map((e) => ({ ...e, rel: e.rel.slice(prefix.length), from: e.from?.slice(prefix.length) }));
       this.render();
+      if (moved || !this.indexIds.size) void this.loadIndexIds();
       if (moved) this.headEmitter.fire();
       void this.prefetch();
     } catch (e) {
@@ -255,8 +258,37 @@ export class RemoteGit implements vscode.Disposable {
     }
   }
 
+  /** `git ls-files -s`: object ids of the staged version of every tracked file. */
+  private async loadIndexIds(): Promise<void> {
+    const r = await this.git(["-c", "core.quotepath=off", "ls-files", "-s", "-z", "--", "."]);
+    if (r.code !== 0) return;
+    const prefix = this.prefix ?? "";
+    const ids = new Map<string, string>();
+    for (const rec of r.stdout.split("\0")) {
+      // "<mode> <id> <stage>\t<path>"
+      const tab = rec.indexOf("\t");
+      if (tab < 0) continue;
+      const [, id, stage] = rec.slice(0, tab).split(" ");
+      const p = rec.slice(tab + 1);
+      if (stage === "0" && p.startsWith(prefix)) ids.set(p.slice(prefix.length), id);
+    }
+    this.indexIds = ids;
+  }
+
+  /** Quick diff (gutter bars, inline diff, revert): compare with the index on the remote. */
+  private originalResource(uri: vscode.Uri): vscode.Uri | undefined {
+    if (uri.scheme !== "file") return undefined;
+    const rel = path.relative(this.root, uri.fsPath);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
+    const id = this.indexIds.get(rel.split(path.sep).join("/"));
+    return id ? gitUri(this.root, rel, "", id) : undefined;
+  }
+
   private hide(): void {
-    if (this.host) this.host.setGitMode(false);
+    if (this.host) {
+      this.host.setGitMode(false);
+      this.host.sc.quickDiffProvider = undefined;
+    }
     else this.sc?.dispose();
     this.sc = undefined;
     this.groups = undefined;
@@ -269,6 +301,7 @@ export class RemoteGit implements vscode.Disposable {
       this.host.setGitMode(true);
       this.sc = this.host.sc;
       this.groups = this.host.git;
+      this.sc.quickDiffProvider = { provideOriginalResource: (u) => this.originalResource(u) };
       void vscode.commands.executeCommand("setContext", "devsync.remoteGit", true);
       return;
     }
@@ -282,6 +315,7 @@ export class RemoteGit implements vscode.Disposable {
     merge.hideWhenEmpty = true;
     index.hideWhenEmpty = true;
     workingTree.hideWhenEmpty = false;
+    sc.quickDiffProvider = { provideOriginalResource: (u) => this.originalResource(u) };
     this.sc = sc;
     this.groups = { merge, index, workingTree };
     void vscode.commands.executeCommand("setContext", "devsync.remoteGit", true);
@@ -526,6 +560,28 @@ export class RemoteGit implements vscode.Disposable {
     if (pick.args) await this.gitOk(`Checking out`, pick.args);
   }
 
+  get scm(): vscode.SourceControl | undefined {
+    return this.sc;
+  }
+
+  get branchName(): string {
+    return this.branch;
+  }
+
+  get changes(): Entry[] {
+    return this.entries;
+  }
+
+  get aheadBehind(): [number, number] {
+    return [this.ahead, this.behind];
+  }
+
+  /** After `git init`: look for the repository again. */
+  resetRepository(): void {
+    this.prefix = undefined;
+    this.scheduleRefresh(0);
+  }
+
   get upstreamName(): string {
     return this.upstream;
   }
@@ -538,4 +594,4 @@ export class RemoteGit implements vscode.Disposable {
   }
 }
 
-class Cancelled extends Error {}
+export class Cancelled extends Error {}

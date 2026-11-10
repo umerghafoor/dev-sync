@@ -85,10 +85,28 @@ they have something to show). The input box becomes the commit message, and
 - Status bar: the remote branch (click to switch or create a branch) and a
   sync button with ahead/behind counts (pull, then push).
 - **⋯** menu: Pull, Push, Fetch, Sync, Commit All, Checkout to…, Show History.
+- **⋯ menu**, organized like Git's: **Commit** (staged, all, amend, undo
+  last commit, signed off, no verify, empty), **Changes** (stage/unstage all,
+  tracked/untracked, discard all, clean untracked), **Pull, Push** (sync,
+  pull, pull rebase, pull from, push, push to, force push with lease, fetch,
+  fetch all), **Branch** (checkout, detached, create, create from, rename,
+  delete, publish, merge, rebase, abort), **Remote** (add, remove),
+  **Stash** (stash, include untracked, staged only, apply/pop latest or a
+  chosen one, drop, drop all, view), **Tags** (create, delete, push).
+- **In the editor**: gutter bars for changes against the staged version on
+  the remote (click for the inline diff, with Revert), the author and age of
+  the current line in the status bar (remote `git blame`; click for commit
+  actions; `devsync.git.blame`), and **Open File History** / **Open File
+  (HEAD)** on the editor tab and Explorer right-click menus.
+- **Auto fetch**: `devsync.git.autofetch` (every `devsync.git.autofetchPeriod`
+  seconds). **Initialize Repository on Remote** when there is none yet.
 - **Graph (remote)**, below it in Source Control: the remote branch's history
-  with lanes and merges, the current commit and the upstream (☁) marked.
-  Click a commit to open all of its changes side by side; right-click copies
-  its id. Buttons: Fetch, Pull, Push, Refresh. (VS Code's own Graph only
+  with lanes and merges, drawn like VS Code's Graph: unpushed commits in the
+  branch color, the upstream in the remote color, ⊚ on the current commit,
+  an Outgoing/Incoming Changes row (click: all unpushed/unpulled changes).
+  Hover a commit for the full message, co-authors, stats and Open on GitHub;
+  click it to open all of its changes side by side; right-click for commit
+  actions (cherry-pick, revert, reset, branch/tag from here, checkout, copy). Buttons: Fetch, Pull, Push, Refresh. (VS Code's own Graph only
   shows local repositories.)
 
 Your local edits are pushed before every git command, so git always sees

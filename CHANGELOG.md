@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- VS Code, remote git: the rest of the Git extension's features — commit
+  variants (amend, undo, signoff, no-verify, empty), stage/discard/clean
+  all, branches (create/from/rename/delete/merge/rebase/detached), pull
+  rebase/from, push to/force-with-lease, fetch all, remotes, stash (all
+  variants), tags, file history, Open File (HEAD), Add to .gitignore,
+  gutter quick diff against the remote index, status-bar blame, auto fetch,
+  initialize repository; menus grouped like Git's.
+- Graph (remote) now looks like VS Code's Graph: branch/remote lane colors,
+  ⊚ HEAD, ref pills, Outgoing/Incoming Changes row, hover card (message,
+  co-authors, stats, Open on GitHub), commit actions on right-click.
 - VS Code: **Graph (remote)** in Source Control — the remote repository's
   commit graph (lanes, merges, branch/upstream badges); clicking a commit
   opens all its changes in a multi-file diff, served from the object cache.

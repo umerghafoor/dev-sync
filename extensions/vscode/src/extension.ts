@@ -14,6 +14,7 @@ import { Activity, formatBytes } from "./activity";
 import { emptyUri, RemoteDocs, remoteUri } from "./remoteDocs";
 import { RemoteGit } from "./remoteGit";
 import { RemoteGraph } from "./remoteGraph";
+import { RemoteGitMore } from "./remoteGitMore";
 
 const CONFIG_FILE = ".devsync.toml";
 
@@ -114,6 +115,7 @@ class Controller implements vscode.Disposable {
       this.disposables.push(
         this.remoteGit,
         new RemoteGraph(root, this.remoteGit, this.log),
+        new RemoteGitMore(this.remoteGit),
         vscode.window.onDidChangeWindowState((w) => w.focused && this.remoteGit?.scheduleRefresh(300)),
       );
     }
