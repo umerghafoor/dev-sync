@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- New flat, abstract logo (your machine, the remote, and work in transit
+  between them) replacing the gradient arrows; updated favicon, VS Code
+  icon and Activity Bar icon.
 - VS Code: the separate "Remote Jobs" sidebar is replaced by the Source
   Control panel.
 - Wire protocol and local caches now use `postcard` instead of the
