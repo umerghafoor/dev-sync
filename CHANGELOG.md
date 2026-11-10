@@ -103,6 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- VS Code: pausing or resuming auto sync is remembered per project across
+  reloads (it used to restart on every reload).
 - `devsync shell` (VS Code: Terminal) ended with exit 255 whenever the link
   dropped or a shared connection was stale. It now reconnects into the same
   folder with backoff; `ssh.persistent_shell = true` runs it in tmux on the

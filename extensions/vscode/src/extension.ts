@@ -132,7 +132,9 @@ class Controller implements vscode.Disposable {
     this.disposables.push(this.model.onDidChange(() => this.setState(this.state, this.detail)));
     this.status.show();
     this.setState("stopped");
-    if (vscode.workspace.getConfiguration("devsync").get<boolean>("autoSync", true)) {
+    // Pausing/resuming is remembered per project; the setting is the default.
+    const remembered = this.ctx.workspaceState.get<boolean>("devsync.autoSyncOn");
+    if (remembered ?? vscode.workspace.getConfiguration("devsync").get<boolean>("autoSync", true)) {
       this.startWatch();
     }
     this.log.appendLine(`devsync project: ${root} (binary: ${binaryPath()})`);
@@ -400,6 +402,13 @@ class Controller implements vscode.Disposable {
     );
     this.watch.start();
     this.setState("idle", "starting auto sync");
+  }
+
+  /** The user paused or resumed auto sync: remember it across reloads. */
+  private setAutoSync(on: boolean): void {
+    void this.ctx.workspaceState.update("devsync.autoSyncOn", on);
+    if (on) this.startWatch();
+    else this.stopWatch();
   }
 
   private stopWatch(): void {
@@ -786,9 +795,9 @@ class Controller implements vscode.Disposable {
     reg("devsync.refreshRemoteFiles", () => this.remoteFiles?.refresh());
 
     reg("devsync.retry", () => this.retryNow());
-    reg("devsync.startWatch", () => this.startWatch());
-    reg("devsync.stopWatch", () => this.stopWatch());
-    reg("devsync.toggleWatch", () => (this.watch?.running ? this.stopWatch() : this.startWatch()));
+    reg("devsync.startWatch", () => this.setAutoSync(true));
+    reg("devsync.stopWatch", () => this.setAutoSync(false));
+    reg("devsync.toggleWatch", () => this.setAutoSync(!this.watch?.running));
     reg("devsync.refresh", async () => {
       this.remoteGit?.scheduleRefresh(0);
       await this.model?.refresh();

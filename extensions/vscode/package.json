@@ -1804,7 +1804,7 @@
         "devsync.autoSync": {
           "type": "boolean",
           "default": true,
-          "description": "Send every save to the remote automatically (devsync watch) when a devsync project is opened."
+          "description": "Send every save to the remote automatically (devsync watch) when a devsync project is opened. Pausing or resuming auto sync from the UI is remembered per project and takes precedence."
         },
         "devsync.openOutputOnBackgroundRun": {
           "type": "boolean",
