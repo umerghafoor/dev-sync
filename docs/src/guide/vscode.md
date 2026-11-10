@@ -69,9 +69,11 @@ empty file. The ⇄ button on each row does the same.
 
 ### The remote's git repository: Git (remote)
 
-If the remote project is a git repository, Source Control also shows
-**Git (remote)**, which works like VS Code's own Git, but on the remote's
-repository:
+If the remote project is a git repository, devsync's entry in Source
+Control works like VS Code's own Git, but on the remote's repository (one
+entry per project; devsync's own lists appear below the git ones, only when
+they have something to show). The input box becomes the commit message, and
+▶ in the title bar runs a command instead:
 
 - **Changes** and **Staged Changes** with the usual M / A / D / R / U
   letters. Click a file for a diff (last committed or staged version ↔ yours).

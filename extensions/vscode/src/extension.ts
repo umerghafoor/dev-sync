@@ -102,10 +102,15 @@ class Controller implements vscode.Disposable {
     this.sidebar?.setModel(this.model);
     this.remoteFiles?.setRoot(root);
     if (vscode.workspace.getConfiguration("devsync").get<boolean>("git.enabled", true)) {
-      this.remoteGit = new RemoteGit(root, this.log, () => {
-        this.model?.scheduleRefresh(0);
-        this.remoteDocs?.refreshAll();
-      });
+      this.remoteGit = new RemoteGit(
+        root,
+        this.log,
+        () => {
+          this.model?.scheduleRefresh(0);
+          this.remoteDocs?.refreshAll();
+        },
+        this.scm,
+      );
       this.disposables.push(
         this.remoteGit,
         new RemoteGraph(root, this.remoteGit, this.log),
@@ -782,7 +787,10 @@ class Controller implements vscode.Disposable {
     reg("devsync.startWatch", () => this.startWatch());
     reg("devsync.stopWatch", () => this.stopWatch());
     reg("devsync.toggleWatch", () => (this.watch?.running ? this.stopWatch() : this.startWatch()));
-    reg("devsync.refresh", () => this.model?.refresh());
+    reg("devsync.refresh", async () => {
+      this.remoteGit?.scheduleRefresh(0);
+      await this.model?.refresh();
+    });
     reg("devsync.showPanel", () => vscode.commands.executeCommand("workbench.view.scm"));
     reg("devsync.walkthrough", () =>
       vscode.commands.executeCommand(

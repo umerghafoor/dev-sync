@@ -76,6 +76,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- VS Code: one Source Control entry per project. When the remote is a git
+  repository, devsync's entry *is* the remote git view (commit box,
+  Merge/Staged/Changes) with "Not on Remote Yet", conflicts and jobs below;
+  otherwise the box runs commands as before.
 - New flat, abstract logo (your machine, the remote, and work in transit
   between them) replacing the gradient arrows; updated favicon, VS Code
   icon and Activity Bar icon.

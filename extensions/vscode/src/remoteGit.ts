@@ -10,6 +10,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import { DevsyncEvent, run, runJson } from "./cli";
 import { tagged } from "./model";
+import { DevsyncScm } from "./scm";
 import { emptyUri, gitUri, objectPath } from "./remoteDocs";
 
 interface GitResult {
@@ -140,6 +141,8 @@ export class RemoteGit implements vscode.Disposable {
     private readonly root: string,
     private readonly log: vscode.OutputChannel,
     private readonly onFilesChanged: () => void,
+    /** The project's devsync Source Control entry: git shares it instead of adding a second one. */
+    private readonly host?: DevsyncScm,
   ) {
     this.registerCommands();
     this.scheduleRefresh(0);
@@ -253,7 +256,8 @@ export class RemoteGit implements vscode.Disposable {
   }
 
   private hide(): void {
-    this.sc?.dispose();
+    if (this.host) this.host.setGitMode(false);
+    else this.sc?.dispose();
     this.sc = undefined;
     this.groups = undefined;
     void vscode.commands.executeCommand("setContext", "devsync.remoteGit", false);
@@ -261,6 +265,14 @@ export class RemoteGit implements vscode.Disposable {
 
   private ensureScm(): void {
     if (this.sc) return;
+    if (this.host) {
+      this.host.setGitMode(true);
+      this.sc = this.host.sc;
+      this.groups = this.host.git;
+      void vscode.commands.executeCommand("setContext", "devsync.remoteGit", true);
+      return;
+    }
+    // Source Control integration turned off for devsync: git gets its own entry.
     const sc = vscode.scm.createSourceControl("devsync-git", "Git (remote)", vscode.Uri.file(this.root));
     sc.inputBox.placeholder = `Message (${process.platform === "darwin" ? "⌘" : "Ctrl+"}Enter to commit on the remote)`;
     sc.acceptInputCommand = { command: "devsync.git.commit", title: "Commit" };
@@ -282,7 +294,8 @@ export class RemoteGit implements vscode.Disposable {
     groups.merge.resourceStates = states(["merge"]);
     groups.index.resourceStates = states(["index"]);
     groups.workingTree.resourceStates = states(["workingTree", "untracked"]);
-    this.sc!.count = this.entries.length;
+    if (this.host) this.host.setGitCount(this.entries.length);
+    else this.sc!.count = this.entries.length;
     this.updateStatusBar();
   }
 
@@ -295,7 +308,7 @@ export class RemoteGit implements vscode.Disposable {
           ? `$(sync)${this.behind ? ` ${this.behind}↓` : ""}${this.ahead ? ` ${this.ahead}↑` : ""}`
           : "$(cloud-upload)";
     this.sc.statusBarCommands = [
-      { command: "devsync.git.checkout", title: `$(git-branch) ${this.branch || "…"} (remote)`, tooltip: "Remote branch — click to switch" },
+      { command: "devsync.git.checkout", title: `$(git-branch) ${this.branch || "…"}`, tooltip: "Branch on the remote — click to switch" },
       {
         command: this.upstream ? "devsync.git.sync" : "devsync.git.publish",
         title: sync,
@@ -520,7 +533,7 @@ export class RemoteGit implements vscode.Disposable {
   dispose(): void {
     if (this.timer) clearTimeout(this.timer);
     this.headEmitter.dispose();
-    this.sc?.dispose();
+    if (!this.host) this.sc?.dispose();
     for (const d of this.disposables) d.dispose();
   }
 }
