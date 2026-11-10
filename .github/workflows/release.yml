@@ -97,7 +97,7 @@ jobs:
             on { print }' CHANGELOG.md > notes.md
           printf '\n---\nVerify downloads with `sha256sum -c SHA256SUMS --ignore-missing`.\n' >> notes.md
           cat notes.md
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: devsync ${{ needs.verify.outputs.version }}
           body_path: notes.md
