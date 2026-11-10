@@ -215,6 +215,7 @@ class RunView implements vscode.WebviewViewProvider {
       <div class="status">
         <span class="dot" id="dot"></span>
         <div class="text"><div class="label" id="label">devsync</div><div class="host" id="host"></div></div>
+        <button class="secondary small" id="auto" title="Auto sync sends every save to the remote">Pause</button>
       </div>
       <div class="chips"><span class="chip" id="chip-pending" data-exec="devsync.changes.focus" title="Show files not on the remote yet"></span><span class="chip" id="chip-running" data-exec="devsync.jobs.focus" title="Show remote jobs"></span></div>
       <div class="offline-row">
@@ -264,6 +265,7 @@ class RunView implements vscode.WebviewViewProvider {
   $("run").addEventListener("click", () => run(false));
   $("bg").addEventListener("click", () => run(true));
   $("clear").addEventListener("click", () => vscode.postMessage({ type: "clearActivity" }));
+  $("auto").addEventListener("click", () => vscode.postMessage({ type: "exec", id: $("auto").dataset.id }));
   document.querySelectorAll("[data-exec]").forEach((b) =>
     b.addEventListener("click", () => vscode.postMessage({ type: "exec", id: b.dataset.exec })));
   cmd.addEventListener("input", () => vscode.setState({ draft: cmd.value }));
@@ -283,6 +285,9 @@ class RunView implements vscode.WebviewViewProvider {
     $("label").textContent = m.label;
     $("label").title = m.detail || "";
     $("host").textContent = m.host; $("host").title = m.host;
+    const off = m.state === "stopped";
+    $("auto").textContent = off ? "Turn on auto sync" : "Pause auto sync";
+    $("auto").dataset.id = off ? "devsync.startWatch" : "devsync.stopWatch";
     $("chip-pending").textContent = m.pending ? m.pending + " not on remote" : "";
     $("chip-running").textContent = m.running ? m.running + " running" : "";
     document.body.classList.toggle("is-offline", m.state === "offline" || m.state === "error");

@@ -51,19 +51,19 @@
       },
       {
         "command": "devsync.scmRunBackground",
-        "title": "Run on Remote in Background",
+        "title": "Run in Background…",
         "category": "devsync",
         "icon": "$(run-all)"
       },
       {
         "command": "devsync.pull",
-        "title": "Pull Everything from Remote",
+        "title": "Pull from Remote",
         "category": "devsync",
         "icon": "$(repo-pull)"
       },
       {
         "command": "devsync.pullPick",
-        "title": "Pull Files from Remote…",
+        "title": "Pull Files…",
         "category": "devsync",
         "icon": "$(cloud-download)"
       },
@@ -75,7 +75,7 @@
       },
       {
         "command": "devsync.push",
-        "title": "Push Now",
+        "title": "Push to Remote",
         "category": "devsync",
         "icon": "$(cloud-upload)"
       },
@@ -87,15 +87,15 @@
       },
       {
         "command": "devsync.startWatch",
-        "title": "Resume Auto Sync",
+        "title": "Auto Sync Is Off (Click to Turn On)",
         "category": "devsync",
-        "icon": "$(sync)"
+        "icon": "$(sync-ignored)"
       },
       {
         "command": "devsync.stopWatch",
-        "title": "Pause Auto Sync",
+        "title": "Auto Sync Is On (Click to Pause)",
         "category": "devsync",
-        "icon": "$(debug-pause)"
+        "icon": "$(sync)"
       },
       {
         "command": "devsync.toggleWatch",
@@ -122,7 +122,7 @@
       },
       {
         "command": "devsync.rerun",
-        "title": "Run Last Command Again",
+        "title": "Run Again",
         "category": "devsync",
         "icon": "$(debug-rerun)"
       },
@@ -134,7 +134,7 @@
       },
       {
         "command": "devsync.shell",
-        "title": "Open Remote Terminal",
+        "title": "Remote Terminal",
         "category": "devsync",
         "icon": "$(terminal)"
       },
@@ -592,54 +592,29 @@
     "menus": {
       "scm/title": [
         {
-          "command": "devsync.scmRun",
-          "when": "scmProvider == devsync && !devsync.remoteGit",
+          "command": "devsync.git.commit",
+          "when": "scmProvider == devsync && devsync.remoteGit",
           "group": "navigation@1"
         },
         {
-          "command": "devsync.run",
-          "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "navigation@1"
+          "command": "devsync.stopWatch",
+          "when": "scmProvider == devsync && devsync.watching",
+          "group": "navigation@2"
+        },
+        {
+          "command": "devsync.startWatch",
+          "when": "scmProvider == devsync && !devsync.watching",
+          "group": "navigation@2"
         },
         {
           "command": "devsync.pull",
           "when": "scmProvider == devsync",
-          "group": "navigation@1.5"
+          "group": "navigation@3"
         },
         {
           "command": "devsync.push",
           "when": "scmProvider == devsync",
-          "group": "navigation@2"
-        },
-        {
-          "command": "devsync.stopWatch",
-          "when": "scmProvider == devsync && devsync.watching && !devsync.remoteGit",
-          "group": "navigation@3"
-        },
-        {
-          "command": "devsync.stopWatch",
-          "when": "scmProvider == devsync && devsync.watching && devsync.remoteGit",
-          "group": "2_sync@9"
-        },
-        {
-          "command": "devsync.startWatch",
-          "when": "scmProvider == devsync && !devsync.watching && !devsync.remoteGit",
-          "group": "navigation@3"
-        },
-        {
-          "command": "devsync.startWatch",
-          "when": "scmProvider == devsync && !devsync.watching && devsync.remoteGit",
-          "group": "2_sync@9"
-        },
-        {
-          "command": "devsync.shell",
-          "when": "scmProvider == devsync && !devsync.remoteGit",
           "group": "navigation@4"
-        },
-        {
-          "command": "devsync.shell",
-          "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "3_tools@0"
         },
         {
           "command": "devsync.refresh",
@@ -647,49 +622,29 @@
           "group": "navigation@5"
         },
         {
-          "command": "devsync.scmRunBackground",
+          "command": "devsync.run",
           "when": "scmProvider == devsync",
           "group": "1_run@1"
         },
         {
-          "command": "devsync.rerun",
+          "command": "devsync.scmRunBackground",
           "when": "scmProvider == devsync",
           "group": "1_run@2"
         },
         {
-          "command": "devsync.collect",
+          "command": "devsync.rerun",
           "when": "scmProvider == devsync",
-          "group": "2_sync@1"
+          "group": "1_run@3"
         },
         {
-          "command": "devsync.forward",
+          "command": "devsync.shell",
           "when": "scmProvider == devsync",
-          "group": "3_tools@1"
-        },
-        {
-          "command": "devsync.status",
-          "when": "scmProvider == devsync",
-          "group": "3_tools@2"
-        },
-        {
-          "command": "devsync.doctor",
-          "when": "scmProvider == devsync",
-          "group": "3_tools@3"
-        },
-        {
-          "command": "devsync.setupClaude",
-          "when": "scmProvider == devsync",
-          "group": "4_setup@1"
-        },
-        {
-          "command": "devsync.walkthrough",
-          "when": "scmProvider == devsync",
-          "group": "4_setup@2"
+          "group": "1_run@4"
         },
         {
           "command": "devsync.pullPick",
           "when": "scmProvider == devsync",
-          "group": "2_sync@0"
+          "group": "2_sync@1"
         },
         {
           "command": "devsync.chooseFiles",
@@ -697,49 +652,74 @@
           "group": "2_sync@2"
         },
         {
-          "command": "devsync.git.commit",
-          "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "navigation@0"
-        },
-        {
           "submenu": "devsync.git.sm.commit",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "0_git@0"
+          "group": "3_git@0"
         },
         {
           "submenu": "devsync.git.sm.changes",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "0_git@1"
+          "group": "3_git@1"
         },
         {
           "submenu": "devsync.git.sm.pullpush",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "0_git@2"
+          "group": "3_git@2"
         },
         {
           "submenu": "devsync.git.sm.branch",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "0_git@3"
+          "group": "3_git@3"
         },
         {
           "submenu": "devsync.git.sm.remote",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "0_git@4"
+          "group": "3_git@4"
         },
         {
           "submenu": "devsync.git.sm.stash",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "0_git@5"
+          "group": "3_git@5"
         },
         {
           "submenu": "devsync.git.sm.tags",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "0_git@6"
+          "group": "3_git@6"
+        },
+        {
+          "command": "devsync.git.init",
+          "when": "scmProvider == devsync && !devsync.remoteGit",
+          "group": "3_git@0"
+        },
+        {
+          "command": "devsync.status",
+          "when": "scmProvider == devsync",
+          "group": "4_help@0"
+        },
+        {
+          "command": "devsync.doctor",
+          "when": "scmProvider == devsync",
+          "group": "4_help@1"
+        },
+        {
+          "command": "devsync.forward",
+          "when": "scmProvider == devsync",
+          "group": "4_help@2"
         },
         {
           "command": "devsync.git.showOutput",
           "when": "scmProvider == devsync && devsync.remoteGit",
-          "group": "9_git@1"
+          "group": "4_help@3"
+        },
+        {
+          "command": "devsync.setupClaude",
+          "when": "scmProvider == devsync",
+          "group": "4_help@4"
+        },
+        {
+          "command": "devsync.walkthrough",
+          "when": "scmProvider == devsync",
+          "group": "4_help@5"
         }
       ],
       "scm/resourceGroup/context": [
@@ -1895,31 +1875,31 @@
     "submenus": [
       {
         "id": "devsync.git.sm.commit",
-        "label": "Commit"
+        "label": "Git: Commit"
       },
       {
         "id": "devsync.git.sm.changes",
-        "label": "Changes"
+        "label": "Git: Changes"
       },
       {
         "id": "devsync.git.sm.pullpush",
-        "label": "Pull, Push"
+        "label": "Git: Pull, Push"
       },
       {
         "id": "devsync.git.sm.branch",
-        "label": "Branch"
+        "label": "Git: Branch"
       },
       {
         "id": "devsync.git.sm.remote",
-        "label": "Remote"
+        "label": "Git: Remote"
       },
       {
         "id": "devsync.git.sm.stash",
-        "label": "Stash"
+        "label": "Git: Stash"
       },
       {
         "id": "devsync.git.sm.tags",
-        "label": "Tags"
+        "label": "Git: Tags"
       }
     ]
   },

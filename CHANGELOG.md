@@ -86,6 +86,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- VS Code: simpler Source Control toolbar — Commit, an always-visible auto
+  sync toggle (on/off shown by the icon), Pull, Push, Refresh; the ⋯ menu
+  has four groups (Run, Sync, Git, Help & tools). The sidebar status card
+  has a Pause / Turn on auto sync button.
 - VS Code: one Source Control entry per project. When the remote is a git
   repository, devsync's entry *is* the remote git view (commit box,
   Merge/Staged/Changes) with "Not on Remote Yet", conflicts and jobs below;
