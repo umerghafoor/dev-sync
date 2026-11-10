@@ -7,9 +7,10 @@
 
 import * as path from "path";
 import * as vscode from "vscode";
-import { DevsyncEvent, runJson } from "./cli";
+import * as fs from "fs";
+import { DevsyncEvent, run, runJson } from "./cli";
 import { tagged } from "./model";
-import { emptyUri, gitUri } from "./remoteDocs";
+import { emptyUri, gitUri, objectPath } from "./remoteDocs";
 
 interface GitResult {
   code: number | null;
@@ -26,6 +27,9 @@ interface Entry {
   group: Group;
   /** Single letter as Git shows it: M A D R C U ? */
   letter: string;
+  /** Object ids of the HEAD and index versions (porcelain v2), if any. */
+  head?: string;
+  index?: string;
 }
 
 const LETTER_TAG: Record<string, string> = {
@@ -50,7 +54,9 @@ const LETTER_WORD: Record<string, string> = {
   T: "Type changed",
 };
 
-/** Parses `git status --porcelain=v1 -b -z`. Paths are repo-relative. */
+const ZERO = /^0+$/;
+
+/** Parses `git status --porcelain=v2 -b -z`. Paths are repo-relative. */
 export function parseStatus(out: string): { branch: string; upstream: string; ahead: number; behind: number; entries: Entry[] } {
   const parts = out.split("\0");
   let branch = "";
@@ -58,35 +64,43 @@ export function parseStatus(out: string): { branch: string; upstream: string; ah
   let ahead = 0;
   let behind = 0;
   const entries: Entry[] = [];
+  const id = (h: string) => (h && !ZERO.test(h) ? h : undefined);
+  const letter = (c: string) => (c === "." ? " " : c);
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
     if (!p) continue;
-    if (p.startsWith("## ")) {
-      const head = p.slice(3);
-      const m = /^(.*?)(?:\.\.\.(\S+))?(?: \[(.*)\])?$/.exec(head);
-      branch = (m?.[1] ?? head).replace(/^No commits yet on /, "").replace(/^HEAD \(no branch\)$/, "detached");
-      upstream = m?.[2] ?? "";
-      ahead = Number(/ahead (\d+)/.exec(m?.[3] ?? "")?.[1] ?? 0);
-      behind = Number(/behind (\d+)/.exec(m?.[3] ?? "")?.[1] ?? 0);
+    if (p.startsWith("# ")) {
+      const [, key, ...rest] = p.split(" ");
+      const val = rest.join(" ");
+      if (key === "branch.head") branch = val === "(detached)" ? "detached" : val;
+      if (key === "branch.upstream") upstream = val;
+      if (key === "branch.ab") {
+        ahead = Number(/\+(\d+)/.exec(val)?.[1] ?? 0);
+        behind = Number(/-(\d+)/.exec(val)?.[1] ?? 0);
+      }
       continue;
     }
-    const x = p[0];
-    const y = p[1];
-    const rel = p.slice(3);
-    let from: string | undefined;
-    if (x === "R" || x === "C") from = parts[++i];
-    if (x === "?" && y === "?") {
-      entries.push({ rel, group: "untracked", letter: "?" });
+    const kind = p[0];
+    if (kind === "?") {
+      entries.push({ rel: p.slice(2), group: "untracked", letter: "?" });
       continue;
     }
-    if (x === "!") continue;
-    const conflict = x === "U" || y === "U" || (x === "A" && y === "A") || (x === "D" && y === "D");
-    if (conflict) {
-      entries.push({ rel, group: "merge", letter: "U" });
+    if (kind === "!") continue;
+    const f = p.split(" ");
+    if (kind === "u") {
+      // u XY sub m1 m2 m3 mW h1 h2 h3 path
+      entries.push({ rel: f.slice(10).join(" "), group: "merge", letter: "U", head: id(f[8]) });
       continue;
     }
-    if (x !== " ") entries.push({ rel, from, group: "index", letter: x });
-    if (y !== " ") entries.push({ rel, group: "workingTree", letter: y });
+    // 1 XY sub mH mI mW hH hI path   |   2 XY sub mH mI mW hH hI Xscore path \0 orig
+    const x = letter(f[1][0]);
+    const y = letter(f[1][1]);
+    const head = id(f[6]);
+    const index = id(f[7]);
+    const rel = f.slice(kind === "2" ? 9 : 8).join(" ");
+    const from = kind === "2" ? parts[++i] : undefined;
+    if (x !== " ") entries.push({ rel, from, group: "index", letter: x, head, index });
+    if (y !== " ") entries.push({ rel, group: "workingTree", letter: y, head, index });
   }
   return { branch, upstream, ahead, behind, entries };
 }
@@ -172,7 +186,7 @@ export class RemoteGit implements vscode.Disposable {
         }
         this.prefix = r.stdout.trim();
       }
-      const r = await this.git(["status", "--porcelain=v1", "-b", "-z", "--", "."]);
+      const r = await this.git(["-c", "core.quotepath=off", "status", "--porcelain=v2", "-b", "-z", "--", "."]);
       if (r.code !== 0) {
         this.log.appendLine(`git status: ${r.stderr.trim()}`);
         return;
@@ -187,6 +201,7 @@ export class RemoteGit implements vscode.Disposable {
         .filter((e) => e.rel.startsWith(prefix))
         .map((e) => ({ ...e, rel: e.rel.slice(prefix.length), from: e.from?.slice(prefix.length) }));
       this.render();
+      void this.prefetch();
     } catch (e) {
       this.log.appendLine(`git (remote): ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -195,6 +210,29 @@ export class RemoteGit implements vscode.Disposable {
         this.again = false;
         this.scheduleRefresh(200);
       }
+    }
+  }
+
+  /**
+   * Downloads the committed/staged versions of every changed file in one
+   * round trip, into a content-addressed cache, so opening a diff is instant.
+   */
+  private prefetching = false;
+  private async prefetch(): Promise<void> {
+    if (this.prefetching) return;
+    const ids = [...new Set(this.entries.flatMap((e) => [e.head, e.index]).filter((x): x is string => !!x))].filter(
+      (id) => !fs.existsSync(objectPath(this.root, id)),
+    );
+    if (!ids.length) return;
+    this.prefetching = true;
+    try {
+      for (let i = 0; i < ids.length; i += 200) {
+        await run(this.root, ["git-objects", "--", ...ids.slice(i, i + 200)], 10 * 60_000);
+      }
+    } catch (e) {
+      this.log.appendLine(`git (remote) prefetch: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      this.prefetching = false;
     }
   }
 
@@ -354,14 +392,14 @@ export class RemoteGit implements vscode.Disposable {
     let right: vscode.Uri;
     let title: string;
     if (e.group === "index") {
-      left = e.letter === "A" ? emptyUri(e.rel) : gitUri(this.root, e.from ?? e.rel, "HEAD");
-      right = e.letter === "D" ? emptyUri(e.rel) : gitUri(this.root, e.rel, "");
+      left = e.letter === "A" ? emptyUri(e.rel) : gitUri(this.root, e.from ?? e.rel, "HEAD", e.head);
+      right = e.letter === "D" ? emptyUri(e.rel) : gitUri(this.root, e.rel, "", e.index);
       title = `${name} (Index, remote)`;
     } else if (e.group === "untracked") {
       await vscode.window.showTextDocument(local, { preview: true });
       return;
     } else {
-      left = e.group === "merge" ? gitUri(this.root, e.rel, "HEAD") : gitUri(this.root, e.rel, "");
+      left = e.group === "merge" ? gitUri(this.root, e.rel, "HEAD", e.head) : gitUri(this.root, e.rel, "", e.index);
       right = e.letter === "D" ? emptyUri(e.rel) : local;
       title = `${name} (Working Tree, remote git)`;
     }

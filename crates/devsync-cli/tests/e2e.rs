@@ -400,6 +400,10 @@ fn remote_git_and_cat_work_like_local_git() {
     assert_eq!(devsync(&env.local, &["cat", "nope.txt"]).status.code(), Some(1));
     // `show` of HEAD gives the committed version, like local git.
     assert_eq!(ok(&git(&["show", "HEAD:a.txt"])), "one\n");
+    // Git objects are fetched once into a local cache, for instant diffs.
+    let id = ok(&git(&["rev-parse", "HEAD:a.txt"])).trim().to_string();
+    ok(&devsync(&env.local, &["git-objects", &id, "0000000000000000000000000000000000000000", "nothex"]));
+    assert_eq!(fs::read_to_string(env.local.join(".devsync/git-objects").join(&id)).unwrap(), "one\n");
 
     // Commands that change files bring the result back here.
     ok(&git(&["checkout", "--", "a.txt"]));

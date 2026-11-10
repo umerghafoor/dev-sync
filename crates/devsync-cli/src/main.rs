@@ -160,6 +160,16 @@ pub enum Cmd {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Fetch git objects (by id) from the remote repository into the local
+    /// cache .devsync/git-objects/, in one round trip. Used for fast diffs.
+    #[command(hide = true)]
+    GitObjects {
+        /// Skip objects larger than this many bytes.
+        #[arg(long, default_value_t = 4 * 1024 * 1024)]
+        max_size: u64,
+        /// Object ids (40 hex characters).
+        ids: Vec<String>,
+    },
     /// Browse the remote project one folder at a time: sizes, file counts and
     /// what is synced. Nothing is hashed; huge folders show lower bounds.
     Tree {

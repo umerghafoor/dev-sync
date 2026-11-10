@@ -3,6 +3,7 @@
 //   devsync-git:/<rel>?<root>#<ref>         git's version on the remote (ref
 //                                           "HEAD", or "" = the index)
 
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { run } from "./cli";
@@ -14,8 +15,14 @@ export function remoteUri(root: string, rel: string): vscode.Uri {
   return vscode.Uri.from({ scheme: REMOTE_SCHEME, path: `/${rel}`, query: root });
 }
 
-export function gitUri(root: string, rel: string, ref: "HEAD" | ""): vscode.Uri {
-  return vscode.Uri.from({ scheme: GIT_SCHEME, path: `/${rel}`, query: root, fragment: ref });
+/** `id`: the object id when known, so the content comes from the local cache. */
+export function gitUri(root: string, rel: string, ref: "HEAD" | "", id?: string): vscode.Uri {
+  return vscode.Uri.from({ scheme: GIT_SCHEME, path: `/${rel}`, query: root, fragment: id ? `${ref}@${id}` : ref });
+}
+
+/** Local cache of remote git objects (filled by `devsync git-objects`). */
+export function objectPath(root: string, id: string): string {
+  return path.join(root, ".devsync", "git-objects", id);
 }
 
 /** An empty document, for the missing side of an added or deleted file. */
@@ -47,9 +54,16 @@ export class RemoteDocs implements vscode.TextDocumentContentProvider, vscode.Di
     if (!root || uri.fragment === "empty") return "";
     this.open.add(uri.toString());
     const rel = uri.path.replace(/^\//, "");
+    if (uri.scheme === GIT_SCHEME && uri.fragment.includes("@")) {
+      // Known object id: read the cached copy, fetching it once if needed.
+      const id = uri.fragment.split("@")[1];
+      const file = objectPath(root, id);
+      if (!fs.existsSync(file)) await run(root, ["git-objects", "--", id], 120_000);
+      if (fs.existsSync(file)) return fs.promises.readFile(file, "utf8");
+    }
     const args =
       uri.scheme === GIT_SCHEME
-        ? ["git", "--no-push", "--no-pull", "--", "show", `${uri.fragment}:./${rel}`]
+        ? ["git", "--no-push", "--no-pull", "--", "show", `${uri.fragment.split("@")[0]}:./${rel}`]
         : ["cat", "--", rel];
     const r = await run(root, args, 120_000);
     if (r.code === 0) return r.stdout;

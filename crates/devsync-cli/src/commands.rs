@@ -72,6 +72,7 @@ pub fn run(cli: Cli) -> i32 {
         Cmd::Status => status(&g),
         Cmd::Changes => changes(&g),
         Cmd::Cat { path } => cat(&g, &path),
+        Cmd::GitObjects { max_size, ids } => git_objects(&g, &ids, max_size),
         Cmd::Git { no_push, no_pull, args } => git(&g, &args, no_push, no_pull),
         Cmd::Tree { path } => tree(&g, path.as_deref().unwrap_or("")),
         Cmd::Select { paths, pull, all } => select(&g, &paths, pull, all),
@@ -235,6 +236,54 @@ fn cat(g: &Global, path: &str) -> Result<i32> {
             Ok(1)
         }
     }
+}
+
+/// Fetches git blobs into `.devsync/git-objects/<id>` (content-addressed,
+/// so each is fetched at most once). One remote command for all of them.
+fn git_objects(g: &Global, ids: &[String], max_size: u64) -> Result<i32> {
+    let p = project()?;
+    let p = Project { rel_cwd: String::new(), ..p };
+    let dir = p.state_dir().join("git-objects");
+    std::fs::create_dir_all(&dir)?;
+    let wanted: Vec<&String> = ids
+        .iter()
+        .filter(|id| id.len() == 40 && id.bytes().all(|b| b.is_ascii_hexdigit()) && id.bytes().any(|b| b != b'0'))
+        .filter(|id| !dir.join(id.as_str()).exists())
+        .collect();
+    let mut stored = 0;
+    if !wanted.is_empty() {
+        // Output: "blob <id> <size>\n<bytes>" per object, "skip <id>" otherwise.
+        let script = r#"max=$1; shift; for o do s=$(git cat-file -s "$o" 2>/dev/null) || { echo "skip $o"; continue; }; if [ "$s" -gt "$max" ]; then echo "skip $o"; continue; fi; echo "blob $o $s"; git cat-file blob "$o"; done"#;
+        let mut argv = vec!["sh".to_string(), "-c".into(), script.into(), "sh".into(), max_size.to_string()];
+        argv.extend(wanted.iter().map(|s| s.to_string()));
+        let out = devsync_client::remote::run(&p, &argv, std::time::Duration::from_secs(300))?;
+        let buf = &out.stdout;
+        let mut i = 0;
+        while i < buf.len() {
+            let nl = match buf[i..].iter().position(|&b| b == b'\n') {
+                Some(n) => i + n,
+                None => break,
+            };
+            let header = String::from_utf8_lossy(&buf[i..nl]).to_string();
+            i = nl + 1;
+            let parts: Vec<&str> = header.split(' ').collect();
+            if parts.len() == 3 && parts[0] == "blob" {
+                let size: usize = parts[2].parse().unwrap_or(0);
+                let end = (i + size).min(buf.len());
+                if end - i == size {
+                    let tmp = dir.join(format!(".{}.tmp", parts[1]));
+                    std::fs::write(&tmp, &buf[i..end])?;
+                    std::fs::rename(&tmp, dir.join(parts[1]))?;
+                    stored += 1;
+                }
+                i = end;
+            }
+        }
+    }
+    if g.json {
+        print_json(json!({"event": "git_objects", "stored": stored, "dir": dir}));
+    }
+    Ok(0)
 }
 
 /// git subcommands that can change files in the working tree.
