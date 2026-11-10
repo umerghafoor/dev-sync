@@ -136,7 +136,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run package
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: devsync-vsix
           path: extensions/vscode/*.vsix
